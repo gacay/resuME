@@ -1,0 +1,266 @@
+// The single source of truth for the resume's shape.
+// The AI fills this structure; the PDF template renders it. Keeping content
+// (AI) and layout (template) separate is what guarantees a consistent format
+// across every generation.
+
+export interface ResumeEntry {
+  /** Job title or project/role name. Rendered bold-italic. */
+  title: string;
+  /** Company, organization, or context. Rendered italic. */
+  organization: string;
+  /** Date range, e.g. "August 2024 - Present". Right-aligned, italic. */
+  date: string;
+  bullets: string[];
+}
+
+export interface ResumeData {
+  name: string;
+  location: string;
+  email: string;
+  phone: string;
+  /** LinkedIn URL or handle. Rendered underlined in the contact line. */
+  linkedin: string;
+  education: { school: string; date: string; degree: string }[];
+  /** Each line renders as "**Category:** details". */
+  skills: { category: string; details: string }[];
+  workExperience: ResumeEntry[];
+  /** "PROJECTS | LEADERSHIP EXPERIENCE & ACTIVITIES" section. */
+  projects: ResumeEntry[];
+}
+
+// JSON Schema given to Claude as a tool input schema. Forcing the model to call
+// this tool guarantees the response is shaped exactly like ResumeData.
+const entrySchema = {
+  type: "object",
+  properties: {
+    title: { type: "string" },
+    organization: { type: "string" },
+    date: { type: "string" },
+    bullets: {
+      type: "array",
+      items: { type: "string" },
+      minItems: 3,
+      maxItems: 3,
+      description:
+        "Exactly 3 action-verb-led bullets tailored to the job; each long enough to fill at least ~75% of its line (roughly 16-28 words) to minimize blank space.",
+    },
+  },
+  required: ["title", "organization", "date", "bullets"],
+} as const;
+
+export const RESUME_TOOL = {
+  name: "build_resume",
+  description:
+    "Return the tailored, one-page resume as structured data. Every field must be filled using only facts present in the candidate's source material.",
+  input_schema: {
+    type: "object",
+    properties: {
+      name: { type: "string", description: "Candidate full name." },
+      location: { type: "string", description: "City, State." },
+      email: { type: "string" },
+      phone: { type: "string" },
+      linkedin: {
+        type: "string",
+        description: "LinkedIn URL or handle exactly as on the source resume.",
+      },
+      company: {
+        type: "string",
+        description:
+          "Hiring company name from the job description (used only for the file name; not shown on the resume).",
+      },
+      education: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            school: { type: "string" },
+            date: { type: "string" },
+            degree: {
+              type: "string",
+              description: "Degree line, e.g. 'B.A. in Computer Science | GPA: 3.84/4.0'.",
+            },
+          },
+          required: ["school", "date", "degree"],
+        },
+      },
+      skills: {
+        type: "array",
+        description:
+          "Only the skills most relevant to the job description, grouped into 3-5 concise lines. Omit skills the posting does not call for.",
+        items: {
+          type: "object",
+          properties: {
+            category: { type: "string", description: "Skill group label." },
+            details: {
+              type: "string",
+              description: "Concise comma-separated list for this group.",
+            },
+          },
+          required: ["category", "details"],
+        },
+      },
+      workExperience: {
+        type: "array",
+        description: "2-3 most relevant roles. Each role has exactly 3 bullets.",
+        items: entrySchema,
+      },
+      projects: {
+        type: "array",
+        description:
+          "2-3 most relevant projects / leadership / activities. Each entry has exactly 3 bullets.",
+        items: entrySchema,
+      },
+    },
+    required: [
+      "name",
+      "location",
+      "email",
+      "phone",
+      "linkedin",
+      "company",
+      "education",
+      "skills",
+      "workExperience",
+      "projects",
+    ],
+  },
+} as const;
+
+/** Coerce a model value into a clean string array. Handles a proper array, a
+ * single string (split into paragraphs/lines), or an array-like object — the
+ * model occasionally returns any of these despite the schema. */
+function asStringArray(value: unknown): string[] {
+  const clean = (s: string) => s.trim();
+  const ok = (s: unknown): s is string =>
+    typeof s === "string" && s.trim().length > 0;
+
+  if (Array.isArray(value)) return value.filter(ok).map(clean);
+  if (typeof value === "string") {
+    const byBlank = value.split(/\n{2,}/).map(clean).filter(Boolean);
+    if (byBlank.length > 1) return byBlank;
+    return value.split(/\n+/).map(clean).filter(Boolean);
+  }
+  if (value && typeof value === "object") {
+    return Object.values(value).filter(ok).map(clean);
+  }
+  return [];
+}
+
+/** Replace em/en dashes with commas (the model is asked not to use them, but
+ * this guarantees none reach the PDF) and tidy the surrounding punctuation.
+ * Ordinary hyphens (e.g. "data-driven") are left untouched. */
+export function removeEmDashes(text: string): string {
+  return text
+    .replace(/\s*[—–]\s*/g, ", ")
+    .replace(/\s+([,.;:!?])/g, "$1")
+    .replace(/,\s*,/g, ", ")
+    .replace(/,\s*\./g, ".")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
+/** Defensive normalization so a missing/odd field never crashes the PDF renderer. */
+export function normalizeResume(input: Partial<ResumeData>): ResumeData {
+  const entries = (list: unknown): ResumeEntry[] =>
+    (Array.isArray(list) ? list : []).map((e) => ({
+      title: e?.title ?? "",
+      organization: e?.organization ?? "",
+      date: e?.date ?? "",
+      // Enforce a consistent 3 bullets per entry, even if the model returns more.
+      bullets: asStringArray(e?.bullets).slice(0, 3),
+    }));
+
+  return {
+    name: input.name ?? "",
+    location: input.location ?? "",
+    email: input.email ?? "",
+    phone: input.phone ?? "",
+    linkedin: input.linkedin ?? "",
+    education: Array.isArray(input.education) ? input.education : [],
+    workExperience: entries(input.workExperience),
+    projects: entries(input.projects),
+    skills: Array.isArray(input.skills) ? input.skills : [],
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Cover letter
+// ---------------------------------------------------------------------------
+
+export interface CoverLetterData {
+  name: string;
+  location: string;
+  email: string;
+  phone: string;
+  linkedin: string;
+  /** Hiring company, from the job description. */
+  company: string;
+  /** Body paragraphs, in order. */
+  paragraphs: string[];
+  /** Name used to sign off (preferred form if evident). */
+  signatureName: string;
+}
+
+export const COVER_LETTER_TOOL = {
+  name: "build_cover_letter",
+  description:
+    "Return a tailored, one-page cover letter as structured data, using only facts present in the candidate's source material.",
+  input_schema: {
+    type: "object",
+    properties: {
+      name: {
+        type: "string",
+        description: "Candidate full name (letter header).",
+      },
+      location: { type: "string", description: "City, State." },
+      email: { type: "string" },
+      phone: { type: "string" },
+      linkedin: {
+        type: "string",
+        description: "LinkedIn URL or handle exactly as on the source resume.",
+      },
+      company: {
+        type: "string",
+        description: "Hiring company name from the job description.",
+      },
+      signatureName: {
+        type: "string",
+        description:
+          "Name to sign off with — preferred first-name form if evident (e.g. from the email or LinkedIn handle), otherwise the full name.",
+      },
+      paragraphs: {
+        type: "array",
+        items: { type: "string" },
+        minItems: 4,
+        maxItems: 5,
+        description:
+          "4-5 body paragraphs in order: (1) interest in the role + hook + company alignment, (2) why a strong fit with concrete skills/experience, (3) why drawn to the company using real job-description details, (4) why the role appeals / growth, (5) brief thank-you close.",
+      },
+    },
+    required: [
+      "name",
+      "location",
+      "email",
+      "phone",
+      "linkedin",
+      "company",
+      "signatureName",
+      "paragraphs",
+    ],
+  },
+} as const;
+
+export function normalizeCoverLetter(
+  input: Partial<CoverLetterData>,
+): CoverLetterData {
+  return {
+    name: input.name ?? "",
+    location: input.location ?? "",
+    email: input.email ?? "",
+    phone: input.phone ?? "",
+    linkedin: input.linkedin ?? "",
+    company: input.company ?? "",
+    paragraphs: asStringArray(input.paragraphs).map(removeEmDashes),
+    signatureName: (input.signatureName ?? "").trim() || (input.name ?? ""),
+  };
+}
