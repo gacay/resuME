@@ -28,8 +28,8 @@ export interface ResumeData {
   projects: ResumeEntry[];
 }
 
-// JSON Schema given to Claude as a tool input schema. Forcing the model to call
-// this tool guarantees the response is shaped exactly like ResumeData.
+// JSON Schema given to the model as a tool input schema. Forcing the model to
+// call this tool guarantees the response is shaped exactly like ResumeData.
 const entrySchema = {
   type: "object",
   properties: {
@@ -77,7 +77,8 @@ export const RESUME_TOOL = {
             date: { type: "string" },
             degree: {
               type: "string",
-              description: "Degree line, e.g. 'B.A. in Computer Science | GPA: 3.84/4.0'.",
+              description:
+                "Degree line, e.g. 'B.A. in Computer Science | GPA: 3.84/4.0'.",
             },
           },
           required: ["school", "date", "degree"],
@@ -86,7 +87,7 @@ export const RESUME_TOOL = {
       skills: {
         type: "array",
         description:
-          "Only the skills most relevant to the job description, grouped into 3-5 concise lines. Omit skills the posting does not call for.",
+          "Skills relevant to the job, grouped into 3-5 concise lines. Build these ONLY from the transferable skills the candidate selected (provided in the prompt). Omit anything not selected or not called for by the posting.",
         items: {
           type: "object",
           properties: {
@@ -181,6 +182,85 @@ export function normalizeResume(input: Partial<ResumeData>): ResumeData {
     projects: entries(input.projects),
     skills: Array.isArray(input.skills) ? input.skills : [],
   };
+}
+
+// ---------------------------------------------------------------------------
+// Transferable skills (the pre-generation selection step)
+// ---------------------------------------------------------------------------
+
+export interface TransferableSkill {
+  /** The skill itself, e.g. "Python", "Stakeholder communication". */
+  name: string;
+  /** A grouping label, e.g. "Programming", "Leadership". */
+  category: string;
+  /** Where in the resume/experiences this skill is evidenced. */
+  evidence: string;
+  /** Whether the skill is relevant to the target job description. */
+  relevant: boolean;
+}
+
+export const SKILLS_TOOL = {
+  name: "list_transferable_skills",
+  description:
+    "Return the list of transferable skills the candidate genuinely demonstrates, so the user can select which to carry into the tailored resume.",
+  input_schema: {
+    type: "object",
+    properties: {
+      skills: {
+        type: "array",
+        description:
+          "Every transferable skill actually evidenced in the resume or additional experiences. Do NOT invent skills. Prefer 8-16 distinct, non-overlapping entries.",
+        items: {
+          type: "object",
+          properties: {
+            name: {
+              type: "string",
+              description: "Short skill name (1-4 words).",
+            },
+            category: {
+              type: "string",
+              description:
+                "Group label, e.g. 'Programming', 'Data', 'Leadership', 'Communication'.",
+            },
+            evidence: {
+              type: "string",
+              description:
+                "Brief note on where this skill shows up in the source (role, project, or task). No fabrication.",
+            },
+            relevant: {
+              type: "boolean",
+              description:
+                "True if this skill is relevant to the target job description.",
+            },
+          },
+          required: ["name", "category", "evidence", "relevant"],
+        },
+      },
+    },
+    required: ["skills"],
+  },
+} as const;
+
+export function normalizeSkills(input: {
+  skills?: unknown;
+}): TransferableSkill[] {
+  const list = Array.isArray(input?.skills) ? input.skills : [];
+  const seen = new Set<string>();
+  const out: TransferableSkill[] = [];
+  for (const s of list) {
+    const name = (s?.name ?? "").trim();
+    if (!name) continue;
+    const key = name.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({
+      name,
+      category: (s?.category ?? "General").trim() || "General",
+      evidence: (s?.evidence ?? "").trim(),
+      relevant: Boolean(s?.relevant),
+    });
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------------------

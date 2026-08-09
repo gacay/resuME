@@ -7,7 +7,10 @@ export interface StoredState {
   resumeBase64: string;
   resumeMime: string;
   jobDescription: string;
-  experiences: string;
+  /** Additional experiences, split into three categories. */
+  expJobs: string;
+  expProjects: string;
+  expSkills: string;
 }
 
 export function loadState(): Partial<StoredState> {

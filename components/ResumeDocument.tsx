@@ -57,6 +57,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
 
+
   // Education
   eduRow: {
     flexDirection: "row",

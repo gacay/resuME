@@ -1,37 +1,29 @@
-import {
-  COVER_LETTER_TOOL,
-  normalizeCoverLetter,
-  type CoverLetterData,
-} from "@/lib/schema";
-import { COVER_LETTER_SYSTEM_PROMPT, buildCoverLetterPrompt } from "@/lib/prompt";
+import { SKILLS_TOOL, normalizeSkills } from "@/lib/schema";
+import { SKILLS_SYSTEM_PROMPT, buildSkillsPrompt } from "@/lib/prompt";
 import { runToolCall, AIError, type AIContent } from "@/lib/ai";
 import { ACTIVE_MODELS } from "@/lib/models";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-interface CoverLetterBody {
+interface SkillsBody {
   resumeBase64?: string;
   resumeMime?: string;
   resumeText?: string;
   jobDescription?: string;
   experiences?: string;
-  selectedSkills?: string[];
 }
 
 export async function POST(req: Request) {
-  let body: CoverLetterBody;
+  let body: SkillsBody;
   try {
-    body = (await req.json()) as CoverLetterBody;
+    body = (await req.json()) as SkillsBody;
   } catch {
     return Response.json({ error: "Invalid request body." }, { status: 400 });
   }
 
   const jobDescription = (body.jobDescription ?? "").trim();
   const experiences = (body.experiences ?? "").trim();
-  const selectedSkills = Array.isArray(body.selectedSkills)
-    ? body.selectedSkills.map((s) => String(s).trim()).filter(Boolean)
-    : [];
 
   if (!jobDescription) {
     return Response.json(
@@ -45,13 +37,12 @@ export async function POST(req: Request) {
 
   if (!hasResumePdf && !body.resumeText?.trim() && !experiences) {
     return Response.json(
-      { error: "Provide a resume or some experiences to write from." },
+      { error: "Provide a resume or some experiences to analyze." },
       { status: 400 },
     );
   }
 
   const content: AIContent[] = [];
-
   if (hasResumePdf) {
     content.push({ type: "pdf", base64: body.resumeBase64 as string });
   } else if (body.resumeText?.trim()) {
@@ -60,42 +51,40 @@ export async function POST(req: Request) {
       text: `CURRENT RESUME:\n${body.resumeText.trim()}`,
     });
   }
-
   content.push({
     type: "text",
-    text: buildCoverLetterPrompt({
+    text: buildSkillsPrompt({
       jobDescription,
       experiences,
       hasResume: hasResumePdf || !!body.resumeText?.trim(),
-      selectedSkills,
     }),
   });
 
   try {
-    const input = await runToolCall<Partial<CoverLetterData>>({
-      config: ACTIVE_MODELS.tailor,
-      system: COVER_LETTER_SYSTEM_PROMPT,
+    const raw = await runToolCall<{ skills?: unknown }>({
+      config: ACTIVE_MODELS.skills,
+      system: SKILLS_SYSTEM_PROMPT,
       content,
-      tool: COVER_LETTER_TOOL,
+      tool: SKILLS_TOOL,
     });
 
-    const data = normalizeCoverLetter(input);
+    const skills = normalizeSkills(raw);
 
-    if (data.paragraphs.length === 0) {
+    if (skills.length === 0) {
       return Response.json(
-        { error: "Could not generate cover letter content." },
+        { error: "Could not identify any transferable skills." },
         { status: 422 },
       );
     }
 
-    return Response.json(data);
+    return Response.json({ skills });
   } catch (err) {
     const msg =
       err instanceof AIError
         ? err.message
         : err instanceof Error
           ? err.message
-          : "Unknown error generating the cover letter.";
+          : "Unknown error extracting skills.";
     return Response.json({ error: msg }, { status: 500 });
   }
 }
