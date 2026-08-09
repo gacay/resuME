@@ -29,6 +29,27 @@ OUTPUT
 - Set the company field to the hiring company's name from the job description (used only for the file name; do not display it on the resume).
 - Respond ONLY by calling the build_resume tool — no prose, no preamble.`;
 
+// ---------------------------------------------------------------------------
+// Girly Pop styling — an optional tone layer appended to the prompts when the
+// user flips the Girly Pop switch. It changes VOICE only; every truthfulness,
+// one-page, and structure rule above still fully applies.
+// ---------------------------------------------------------------------------
+export const GIRLY_RESUME_ADDENDUM = `
+
+GIRLY POP VOICE (style only — never override the truthfulness or one-page rules):
+- Write in a bright, confident, "girly pop" / Y2K main-character voice: bubbly, empowered, and glowing, while staying recruiter-credible and ATS-friendly.
+- Keep every bullet led by a strong action verb and keep all real metrics — just choose vivid, energetic, self-assured wording (e.g. "spearheaded", "elevated", "orchestrated", "leveled up", "owned").
+- Do NOT use emojis or symbol characters anywhere in the output (bullets, skills, or any other field). The PDF renders this text in a webfont that only supports plain Latin letters, numbers, and standard punctuation — anything else renders as broken characters. Convey the sparkle through word choice only.
+- Never invent facts, employers, titles, dates, or metrics to fit the vibe. Truth first, sparkle second.`;
+
+export const GIRLY_COVER_ADDENDUM = `
+
+GIRLY POP VOICE (style only — keep it professional and truthful):
+- Write with warm, confident, "girly pop" / Y2K main-character energy: enthusiastic, personable, and genuinely excited, while remaining a credible, hireable cover letter.
+- Favor vivid, upbeat phrasing and a friendly, glowing tone through word choice alone.
+- Do NOT use emojis or symbol characters anywhere in the letter. The PDF renders this text in a webfont that only supports plain Latin letters, numbers, and standard punctuation — anything else renders as broken characters.
+- Keep all facts strictly truthful; the sparkle is tone only, never invented substance.`;
+
 function skillsBlock(selectedSkills: string[]): string {
   if (!selectedSkills.length) {
     return "\n\nSELECTED TRANSFERABLE SKILLS: (none selected — leave additional.skills empty).";
@@ -41,11 +62,13 @@ export function buildUserPrompt({
   experiences,
   hasResume,
   selectedSkills,
+  girly = false,
 }: {
   jobDescription: string;
   experiences: string;
   hasResume: boolean;
   selectedSkills: string[];
+  girly?: boolean;
 }): string {
   const parts: string[] = [];
 
@@ -54,6 +77,8 @@ export function buildUserPrompt({
       ? "The candidate's current resume is attached above as a document."
       : "No resume document was provided; build the resume from the additional experiences below.",
   );
+
+  if (girly) parts.push(GIRLY_RESUME_ADDENDUM);
 
   parts.push(`\n\nTARGET JOB DESCRIPTION:\n${jobDescription.trim()}`);
 
@@ -148,11 +173,13 @@ export function buildCoverLetterPrompt({
   experiences,
   hasResume,
   selectedSkills,
+  girly = false,
 }: {
   jobDescription: string;
   experiences: string;
   hasResume: boolean;
   selectedSkills: string[];
+  girly?: boolean;
 }): string {
   const parts: string[] = [];
 
@@ -161,6 +188,8 @@ export function buildCoverLetterPrompt({
       ? "The candidate's current resume is attached above as a document."
       : "No resume document was provided; build the letter from the additional experiences below.",
   );
+
+  if (girly) parts.push(GIRLY_COVER_ADDENDUM);
 
   parts.push(`\n\nTARGET JOB DESCRIPTION:\n${jobDescription.trim()}`);
 

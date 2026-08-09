@@ -7,6 +7,9 @@ import type {
   TransferableSkill,
 } from "@/lib/schema";
 import { loadState, saveState, clearState } from "@/lib/storage";
+import { MusicVisualizer } from "@/components/MusicVisualizer";
+
+const GIRLY_KEY = "resume-tailor:girly";
 
 type Kind = "resume" | "cover";
 
@@ -74,6 +77,10 @@ export default function Home() {
   const [status, setStatus] = useState("");
   const [hydrated, setHydrated] = useState(false);
 
+  // Girly Pop mode — repaints the whole site, changes generation style, and
+  // starts the music/visualizer.
+  const [girly, setGirly] = useState(false);
+
   // Transferable-skills selection step.
   const [pendingKind, setPendingKind] = useState<Kind | null>(null);
   const [skills, setSkills] = useState<TransferableSkill[] | null>(null);
@@ -89,8 +96,26 @@ export default function Home() {
     if (s.expJobs) setExpJobs(s.expJobs);
     if (s.expProjects) setExpProjects(s.expProjects);
     if (s.expSkills) setExpSkills(s.expSkills);
+    try {
+      setGirly(window.localStorage.getItem(GIRLY_KEY) === "1");
+    } catch {
+      /* ignore */
+    }
     setHydrated(true);
   }, []);
+
+  // Persist + reflect the girly flag on <body> so the background layers and
+  // global skin apply beyond this component's subtree.
+  useEffect(() => {
+    if (!hydrated) return;
+    try {
+      window.localStorage.setItem(GIRLY_KEY, girly ? "1" : "0");
+    } catch {
+      /* ignore */
+    }
+    document.body.classList.toggle("girly-pop", girly);
+    return () => document.body.classList.remove("girly-pop");
+  }, [girly, hydrated]);
 
   // Persist inputs whenever they change (after initial hydration).
   useEffect(() => {
@@ -193,6 +218,7 @@ export default function Home() {
             projects: expProjects,
             skills: expSkills,
           }),
+          girly,
         }),
       });
       const payload = await res.json();
@@ -258,6 +284,7 @@ export default function Home() {
               skills: expSkills,
             }),
             selectedSkills,
+            girly,
           }),
         },
       );
@@ -276,14 +303,18 @@ export default function Home() {
       if (kind === "resume") {
         const data = payload as ResumeData & { company?: string };
         const { ResumeDocument } = await import("@/components/ResumeDocument");
-        blob = await pdf(<ResumeDocument data={data} />).toBlob();
+        blob = await pdf(
+          <ResumeDocument data={data} theme={girly ? "girly" : "normal"} />,
+        ).toBlob();
         filename = buildFileName(data.name, "Resume", data.company);
       } else {
         const data = payload as CoverLetterData;
         const { CoverLetterDocument } = await import(
           "@/components/CoverLetterDocument"
         );
-        blob = await pdf(<CoverLetterDocument data={data} />).toBlob();
+        blob = await pdf(
+          <CoverLetterDocument data={data} theme={girly ? "girly" : "normal"} />,
+        ).toBlob();
         filename = buildFileName(data.name, "Cover_Letter", data.company);
       }
 
@@ -323,15 +354,76 @@ export default function Home() {
   const inSkillsStep = pendingKind !== null && skills !== null;
   const anyBusy = busy !== null;
 
+  // Fixed, deterministic scatter of twinkling background stars for girly mode.
+  const bgStars = useMemo(
+    () =>
+      Array.from({ length: 28 }, (_, i) => {
+        const rnd = (n: number) => ((Math.sin(i * 99.7 + n) + 1) / 2) * 100;
+        return {
+          left: rnd(1),
+          top: rnd(2),
+          size: 10 + rnd(3) * 0.22,
+          delay: rnd(4) * 0.04,
+          glyph: i % 3 === 0 ? "✦" : i % 3 === 1 ? "✧" : "★",
+        };
+      }),
+    [],
+  );
+
   return (
-    <main className="mx-auto max-w-3xl px-5 py-10">
+    <main className="mx-auto max-w-3xl px-4 py-8 sm:px-5 sm:py-10">
+      {/* Girly Pop background layers (rendered only when the mode is on). */}
+      {girly && (
+        <>
+          <div className="girly-pop-bg" aria-hidden />
+          <div className="girly-pop-stars" aria-hidden>
+            {bgStars.map((s, i) => (
+              <span
+                key={i}
+                style={{
+                  left: `${s.left}%`,
+                  top: `${s.top}%`,
+                  fontSize: `${s.size}px`,
+                  animationDelay: `${s.delay}s`,
+                }}
+              >
+                {s.glyph}
+              </span>
+            ))}
+          </div>
+        </>
+      )}
+
+      {/* Normal / Girly Pop switch */}
+      <div className="gp-switch-wrap">
+        <span className="gp-switch-label-off">Normal</span>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={girly}
+          aria-label="Toggle Girly Pop mode"
+          className="gp-switch"
+          data-on={girly}
+          onClick={() => setGirly((g) => !g)}
+        >
+          <span className="gp-switch-knob">{girly ? "💖" : "🖤"}</span>
+        </button>
+        <span className="gp-switch-label-on">Girly Pop</span>
+      </div>
+
+      {/* Music player + star visualizer (only in Girly Pop mode). */}
+      {girly && (
+        <MusicVisualizer active={girly} src="/girl-like-me.mp3" />
+      )}
+
       <header className="mb-8">
-        <h1 className="text-3xl font-bold tracking-tight">Resume Tailor</h1>
+        <h1 className="text-2xl font-bold tracking-tight break-words sm:text-3xl">
+          {girly ? "✨ Resume Tailor ✨" : "Resume Tailor"}
+        </h1>
         <p className="mt-2 text-slate-600">
-          Upload your resume, paste a job description, then pick which
-          transferable skills to carry over before generating a tailored,
-          one-page resume or a matching cover letter. Your inputs are saved in
-          this browser.
+          {girly
+            ? "Slay bestie 💅 Upload your resume, drop the job description, and pick your main-character transferable skills. We'll glow it up into a tailored, one-page resume (in full pink) or a matching cover letter. Your inputs stay saved in this browser."
+            : "Upload your resume, paste a job description, then pick which transferable skills to carry over before generating a tailored, one-page resume or a matching cover letter. Your inputs are saved in this browser."}
         </p>
       </header>
 
@@ -531,12 +623,12 @@ export default function Home() {
               ))}
             </div>
 
-            <div className="mt-4 flex flex-wrap items-center gap-3">
+            <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
               <button
                 type="button"
                 onClick={confirmAndGenerate}
                 disabled={anyBusy}
-                className="rounded-lg bg-slate-900 px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+                className="w-full rounded-lg bg-slate-900 px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
               >
                 {busy === pendingKind
                   ? "Generating…"
@@ -548,7 +640,7 @@ export default function Home() {
                 type="button"
                 onClick={resetSkillsStep}
                 disabled={anyBusy}
-                className="rounded-lg px-4 py-3 text-sm font-medium text-slate-500 hover:text-slate-800 disabled:opacity-60"
+                className="w-full rounded-lg px-4 py-3 text-sm font-medium text-slate-500 hover:text-slate-800 disabled:opacity-60 sm:w-auto"
               >
                 Cancel
               </button>
@@ -558,12 +650,12 @@ export default function Home() {
 
         {/* Actions (hidden while choosing skills) */}
         {!inSkillsStep && (
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
             <button
               type="button"
               onClick={() => startFlow("resume")}
               disabled={anyBusy}
-              className="rounded-lg bg-slate-900 px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+              className="w-full rounded-lg bg-slate-900 px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
             >
               {busy === "skills" ? "Reading skills…" : "Generate tailored resume"}
             </button>
@@ -571,7 +663,7 @@ export default function Home() {
               type="button"
               onClick={() => startFlow("cover")}
               disabled={anyBusy}
-              className="rounded-lg border border-slate-900 bg-white px-6 py-3 text-sm font-semibold text-slate-900 shadow-sm transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+              className="w-full rounded-lg border border-slate-900 bg-white px-6 py-3 text-sm font-semibold text-slate-900 shadow-sm transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
             >
               {busy === "skills" ? "Reading skills…" : "Generate cover letter"}
             </button>
@@ -579,7 +671,7 @@ export default function Home() {
               type="button"
               onClick={onClearAll}
               disabled={anyBusy}
-              className="rounded-lg px-4 py-3 text-sm font-medium text-slate-500 hover:text-slate-800 disabled:opacity-60"
+              className="w-full rounded-lg px-4 py-3 text-sm font-medium text-slate-500 hover:text-slate-800 disabled:opacity-60 sm:w-auto"
             >
               Clear saved data
             </button>
