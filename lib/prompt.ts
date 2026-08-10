@@ -5,15 +5,22 @@ You receive: (1) the candidate's current resume (a PDF document or text), (2) op
 CONTENT SELECTION & TAILORING
 - Read the job description carefully and select/prioritize the experiences, projects, and skills most relevant to it.
 - You may pull in items from the additional experiences when they strengthen the match, and you may drop weaker items to save space.
-- Rewrite each bullet to mirror the language, keywords, and required competencies of the job description. Lead with a strong action verb and quantify impact wherever the source material supports it.
+- Rewrite each bullet to reflect the competencies the job description asks for. Lead with a strong, specific action verb and quantify impact wherever the source material supports it.
 
-TRANSFERABLE SKILLS (critical)
-- The SELECTED TRANSFERABLE SKILLS list is authoritative. The skills lines you output must be built ONLY from skills in that list. Do NOT add skills the user did not select, and never invent skills.
-- If the selected list is empty, leave skills as an empty array.
+NATURAL, HUMAN VOICE (write like a person, not a generator)
+- Write the way a sharp, grounded professional actually writes: clear, specific, and confident. The result should read as human-written, not machine-generated.
+- Vary sentence structure and openings across bullets. Do not start multiple bullets the same way, and do not fall into a repetitive template.
+- Prefer concrete detail (what you built, for whom, with what, to what effect) over vague superlatives. Cut filler and empty intensifiers.
+- Avoid overused resume/AI cliches and buzzword padding: e.g. "results-driven", "detail-oriented", "team player", "passionate", "dynamic", "synergy", "leveraged", "spearheaded" (when generic), "responsible for", "in today's fast-paced world". Say the real thing plainly instead.
+- KEYWORDS ARE NON-NEGOTIABLE: keep the exact tools, technologies, methods, certifications, and role-specific terms from the job description verbatim so the resume still passes ATS keyword matching. Sounding human means better connective wording around those terms — never dropping or vaguely paraphrasing the terms themselves.
 
 TRUTHFULNESS (critical)
 - Use ONLY facts found in the provided resume or additional experiences. Never invent employers, titles, dates, degrees, metrics, or technologies. You may rephrase, reframe, and emphasize — never fabricate.
 - Copy the candidate's name, contact details (location, email, phone, LinkedIn), and education exactly as they appear in the source resume.
+
+TRANSFERABLE SKILLS (critical)
+- The SELECTED TRANSFERABLE SKILLS list is authoritative. The skills lines you output must be built ONLY from skills in that list. Do NOT add skills the user did not select, and never invent skills.
+- If the selected list is empty, leave skills as an empty array.
 
 ONE-PAGE BUDGET (the output MUST fit on a single US Letter page)
 - education: include all real entries (usually 1-2).
@@ -29,32 +36,11 @@ OUTPUT
 - Set the company field to the hiring company's name from the job description (used only for the file name; do not display it on the resume).
 - Respond ONLY by calling the build_resume tool — no prose, no preamble.`;
 
-// ---------------------------------------------------------------------------
-// Girly Pop styling — an optional tone layer appended to the prompts when the
-// user flips the Girly Pop switch. It changes VOICE only; every truthfulness,
-// one-page, and structure rule above still fully applies.
-// ---------------------------------------------------------------------------
-export const GIRLY_RESUME_ADDENDUM = `
-
-GIRLY POP VOICE (style only — never override the truthfulness or one-page rules):
-- Write in a bright, confident, "girly pop" / Y2K main-character voice: bubbly, empowered, and glowing, while staying recruiter-credible and ATS-friendly.
-- Keep every bullet led by a strong action verb and keep all real metrics — just choose vivid, energetic, self-assured wording (e.g. "spearheaded", "elevated", "orchestrated", "leveled up", "owned").
-- Do NOT use emojis or symbol characters anywhere in the output (bullets, skills, or any other field). The PDF renders this text in a webfont that only supports plain Latin letters, numbers, and standard punctuation — anything else renders as broken characters. Convey the sparkle through word choice only.
-- Never invent facts, employers, titles, dates, or metrics to fit the vibe. Truth first, sparkle second.`;
-
-export const GIRLY_COVER_ADDENDUM = `
-
-GIRLY POP VOICE (style only — keep it professional and truthful):
-- Write with warm, confident, "girly pop" / Y2K main-character energy: enthusiastic, personable, and genuinely excited, while remaining a credible, hireable cover letter.
-- Favor vivid, upbeat phrasing and a friendly, glowing tone through word choice alone.
-- Do NOT use emojis or symbol characters anywhere in the letter. The PDF renders this text in a webfont that only supports plain Latin letters, numbers, and standard punctuation — anything else renders as broken characters.
-- Keep all facts strictly truthful; the sparkle is tone only, never invented substance.`;
-
 function skillsBlock(selectedSkills: string[]): string {
   if (!selectedSkills.length) {
-    return "\n\nSELECTED TRANSFERABLE SKILLS: (none selected — leave additional.skills empty).";
+    return "\n\nSELECTED TRANSFERABLE SKILLS: (none selected — leave the skills array empty).";
   }
-  return `\n\nSELECTED TRANSFERABLE SKILLS (build additional.skills ONLY from these; do not add any others):\n- ${selectedSkills.join("\n- ")}`;
+  return `\n\nSELECTED TRANSFERABLE SKILLS (build the skills section ONLY from these; do not add any others):\n- ${selectedSkills.join("\n- ")}`;
 }
 
 export function buildUserPrompt({
@@ -62,13 +48,11 @@ export function buildUserPrompt({
   experiences,
   hasResume,
   selectedSkills,
-  girly = false,
 }: {
   jobDescription: string;
   experiences: string;
   hasResume: boolean;
   selectedSkills: string[];
-  girly?: boolean;
 }): string {
   const parts: string[] = [];
 
@@ -78,13 +62,11 @@ export function buildUserPrompt({
       : "No resume document was provided; build the resume from the additional experiences below.",
   );
 
-  if (girly) parts.push(GIRLY_RESUME_ADDENDUM);
-
   parts.push(`\n\nTARGET JOB DESCRIPTION:\n${jobDescription.trim()}`);
 
   if (experiences.trim()) {
     parts.push(
-      `\n\nADDITIONAL EXPERIENCES (not necessarily on the resume — use any that strengthen the match):\n${experiences.trim()}`,
+      `\n\nADDITIONAL EXPERIENCES (not necessarily on the resume — use any that strengthen the match, but never treat them as license to invent):\n${experiences.trim()}`,
     );
   }
 
@@ -98,20 +80,27 @@ export function buildUserPrompt({
 }
 
 // ---------------------------------------------------------------------------
-// Transferable-skills extraction (the pre-generation selection step)
+// Transferable-skills extraction + gap analysis (the pre-generation step)
 // ---------------------------------------------------------------------------
 
-export const SKILLS_SYSTEM_PROMPT = `You are a career analyst who extracts the transferable skills a candidate genuinely possesses.
+export const SKILLS_SYSTEM_PROMPT = `You are a career analyst. You do two things: (1) extract the transferable skills a candidate genuinely possesses, and (2) identify the job's requirements the candidate does NOT clearly meet, so the user can decide how to respond.
 
-You receive: (1) the candidate's resume (PDF or text), (2) optional additional experiences, and (3) a target job description. Call the \`list_transferable_skills\` tool with the result.
+You receive: (1) the candidate's resume (PDF or text), (2) optional additional experiences, and (3) a target job description. Call the \`list_transferable_skills\` tool with both lists.
 
-RULES
+TRANSFERABLE SKILLS (the \`skills\` list)
 - List ONLY skills that are actually evidenced in the resume or additional experiences. Never invent or infer skills the candidate has not demonstrated. This list is what prevents the downstream resume generator from hallucinating skills, so accuracy is essential.
 - Include both hard skills (tools, languages, methods) and transferable soft skills (leadership, communication, project management) when they are clearly evidenced.
 - For each skill, give a brief 'evidence' note pointing to where it appears in the source. If you cannot point to real evidence, do not include the skill.
 - Set 'relevant' true when the skill maps to the target job description, false otherwise. Include relevant AND non-relevant evidenced skills so the user can decide.
 - Prefer 8-16 distinct, non-overlapping skills. Group them with a short 'category'.
-- Respond ONLY by calling the list_transferable_skills tool — no prose.`;
+
+MISSING / UNMET REQUIREMENTS (the \`missing\` list)
+- Read the job description's stated requirements (skills, tools, qualifications, years, domains) and list the ones the candidate does NOT clearly evidence in the resume or additional experiences.
+- For each, give the requirement 'name', a short 'category', and a 'reason' that states plainly what the posting asks for and why it looks unmet from the provided materials.
+- Be honest and specific, not exhaustive — focus on the requirements that genuinely matter for this role (aim for 0-8). If the candidate appears to meet everything important, return an empty \`missing\` list.
+- Do NOT fabricate requirements that are not in the job description, and do NOT list something as missing if the resume actually evidences it.
+
+Respond ONLY by calling the list_transferable_skills tool — no prose.`;
 
 export function buildSkillsPrompt({
   jobDescription,
@@ -127,7 +116,7 @@ export function buildSkillsPrompt({
   parts.push(
     hasResume
       ? "The candidate's resume is attached above as a document."
-      : "No resume document was provided; extract skills from the additional experiences below.",
+      : "No resume document was provided; analyze the additional experiences below.",
   );
 
   parts.push(`\n\nTARGET JOB DESCRIPTION:\n${jobDescription.trim()}`);
@@ -137,7 +126,7 @@ export function buildSkillsPrompt({
   }
 
   parts.push(
-    "\n\nIdentify the candidate's real transferable skills and call list_transferable_skills.",
+    "\n\nIdentify the candidate's real transferable skills AND the job requirements they do not clearly meet, then call list_transferable_skills.",
   );
 
   return parts.join("");
@@ -147,23 +136,27 @@ export function buildSkillsPrompt({
 // Cover letter
 // ---------------------------------------------------------------------------
 
-export const COVER_LETTER_SYSTEM_PROMPT = `You are an expert career writer composing a tailored, professional cover letter.
+export const COVER_LETTER_SYSTEM_PROMPT = `You are an expert career writer composing a tailored, professional cover letter that reads like a real person wrote it.
 
 You receive: (1) the candidate's current resume (a PDF document or text), (2) optional additional experiences, (3) a target job description, and (4) the candidate's selected transferable skills. Produce the letter by calling the \`build_cover_letter\` tool.
 
 STRUCTURE (4-5 short paragraphs, in this order)
-1. State interest in the specific role at the company; give a brief background hook (degree / level) and connect to the company's mission or focus drawn from the job description.
+1. Open with genuine interest in the specific role at the company; give a brief background hook (degree / level) and connect to the company's mission or focus drawn from the job description. Do NOT open with a stock line like "I am writing to express my interest in".
 2. Why you are a strong fit: combine technical and business strengths, citing concrete skills, projects, or experience from the resume / additional experiences.
 3. Why you are drawn to the company: reference specific, real details from the job description (scale, products, mission, technology).
 4. Why the role appeals and how it supports your growth.
 5. A brief closing that thanks the reader and invites a conversation.
+
+NATURAL, HUMAN VOICE
+- Write like a thoughtful, real applicant: warm, specific, and confident, with natural sentence rhythm. Avoid a stiff, templated, or obviously AI-generated tone.
+- Cut cliches and filler ("passionate", "proven track record", "team player", "results-driven", "I believe I would be a great fit", "in today's fast-paced world"). Show it with concrete detail instead of asserting it.
+- Keep the exact role-relevant keywords and technologies from the job description so the letter stays on-topic and ATS-aligned; the human voice is in the connective writing, not in dropping those terms.
 
 RULES
 - Truthful: use ONLY facts present in the resume or additional experiences; never invent employers, titles, metrics, or skills. When you cite skills, favor the candidate's selected transferable skills. Reference only company details stated in the job description.
 - Pull the candidate's name and contact details (location, email, phone, LinkedIn) from the resume.
 - Set \`company\` to the hiring company's name from the job description.
 - Set \`signatureName\` to the candidate's name exactly as it appears on the resume (the same as the header name). Do NOT infer, shorten, translate, or guess a name from the email address or LinkedIn handle.
-- Professional, confident, specific tone; first person; no clichés or filler.
 - Do NOT use em dashes (—) or en dashes (–) anywhere. Use commas, periods, or "and" instead, and phrase sentences so they do not rely on dashes. Ordinary hyphens in compound words (e.g. "data-driven") are fine.
 - Keep the whole letter to a single page (roughly 250-380 words across the body paragraphs).
 - Respond ONLY by calling the build_cover_letter tool — no prose, no preamble.`;
@@ -173,13 +166,11 @@ export function buildCoverLetterPrompt({
   experiences,
   hasResume,
   selectedSkills,
-  girly = false,
 }: {
   jobDescription: string;
   experiences: string;
   hasResume: boolean;
   selectedSkills: string[];
-  girly?: boolean;
 }): string {
   const parts: string[] = [];
 
@@ -189,13 +180,11 @@ export function buildCoverLetterPrompt({
       : "No resume document was provided; build the letter from the additional experiences below.",
   );
 
-  if (girly) parts.push(GIRLY_COVER_ADDENDUM);
-
   parts.push(`\n\nTARGET JOB DESCRIPTION:\n${jobDescription.trim()}`);
 
   if (experiences.trim()) {
     parts.push(
-      `\n\nADDITIONAL EXPERIENCES (use any that strengthen the letter):\n${experiences.trim()}`,
+      `\n\nADDITIONAL EXPERIENCES (use any that strengthen the letter; never invent beyond them):\n${experiences.trim()}`,
     );
   }
 

@@ -6,49 +6,15 @@ import {
   Text,
   View,
   StyleSheet,
-  Font,
 } from "@react-pdf/renderer";
 import type { ResumeData, ResumeEntry } from "@/lib/schema";
 
-export type ResumeTheme = "normal" | "girly";
+// The fixed template. Built only from @react-pdf primitives and the built-in
+// Times-Roman family (no font registration needed), so the layout — spacing,
+// sizing, rules, alignment — is identical on every generation, in every site
+// mode. The AI never touches this file; it only supplies the ResumeData.
 
-// The fixed template. The NORMAL theme is built only from @react-pdf primitives
-// and the built-in Times-Roman family (no font registration needed). The GIRLY
-// theme registers a bubbly display face (Pacifico) + a rounded body face
-// (Comic Neue) and repaints everything pink. The AI never touches this file; it
-// only supplies the ResumeData.
-
-// --- Girly font registration (config only; fonts are fetched lazily at render
-// time, and only when a Text actually uses them). Served from the google/fonts
-// mirror on jsDelivr, which exposes stable static .ttf URLs. -----------------
-const GF = "https://cdn.jsdelivr.net/gh/google/fonts@main/ofl";
-let girlyFontsRegistered = false;
-function registerGirlyFonts() {
-  if (girlyFontsRegistered) return;
-  girlyFontsRegistered = true;
-  try {
-    Font.register({ family: "Pacifico", src: `${GF}/pacifico/Pacifico-Regular.ttf` });
-    Font.register({
-      family: "Comic Neue",
-      fonts: [
-        { src: `${GF}/comicneue/ComicNeue-Regular.ttf` },
-        { src: `${GF}/comicneue/ComicNeue-Bold.ttf`, fontWeight: 700 },
-        { src: `${GF}/comicneue/ComicNeue-Italic.ttf`, fontStyle: "italic" },
-        {
-          src: `${GF}/comicneue/ComicNeue-BoldItalic.ttf`,
-          fontWeight: 700,
-          fontStyle: "italic",
-        },
-      ],
-    });
-    // Comic Neue has no true bold-italic hinting issues; disable hyphenation.
-    Font.registerHyphenationCallback((w) => [w]);
-  } catch {
-    girlyFontsRegistered = false;
-  }
-}
-
-const normalStyles = StyleSheet.create({
+const styles = StyleSheet.create({
   page: {
     fontFamily: "Times-Roman",
     fontSize: 10,
@@ -96,108 +62,12 @@ const normalStyles = StyleSheet.create({
   bulletText: { flex: 1, fontSize: 10, textAlign: "justify", lineHeight: 1.3 },
 });
 
-// Pink Y2K girly-pop skin. Same geometry, candy palette + rounded/script faces.
-const PINK = "#d6156d";
-const PINK_SOFT = "#ff8fcd";
-const PINK_INK = "#a01a5e";
-const girlyStyles = StyleSheet.create({
-  page: {
-    fontFamily: "Comic Neue",
-    fontSize: 10,
-    color: PINK_INK,
-    backgroundColor: "#fff2f9",
-    lineHeight: 1.25,
-    paddingTop: 30,
-    paddingBottom: 28,
-    paddingHorizontal: 42,
-  },
-  name: {
-    fontFamily: "Pacifico",
-    fontSize: 22,
-    lineHeight: 1.6,
-    color: PINK,
-    textAlign: "center",
-    letterSpacing: 0.5,
-    marginTop: 4,
-    marginBottom: 10,
-  },
-  contact: {
-    fontSize: 9.5,
-    color: PINK_INK,
-    textAlign: "center",
-    marginTop: 2,
-    marginBottom: 2,
-  },
-  link: { textDecoration: "underline", color: PINK },
-  sectionHeader: {
-    fontFamily: "Pacifico",
-    fontSize: 13,
-    lineHeight: 1.6,
-    color: PINK,
-    letterSpacing: 0.3,
-    borderBottomWidth: 1.5,
-    borderBottomColor: PINK_SOFT,
-    paddingBottom: 4,
-    marginTop: 10,
-    marginBottom: 6,
-  },
-  eduRow: { flexDirection: "row", justifyContent: "space-between" },
-  eduSchool: { fontFamily: "Comic Neue", fontWeight: 700, fontSize: 10.5, color: PINK_INK, flex: 1 },
-  eduDate: {
-    fontFamily: "Comic Neue",
-    fontStyle: "italic",
-    fontSize: 10,
-    color: "#c74e93",
-    flexShrink: 0,
-    marginLeft: 8,
-  },
-  eduDegree: {
-    fontFamily: "Comic Neue",
-    fontStyle: "italic",
-    fontSize: 10,
-    color: "#c74e93",
-    marginBottom: 3,
-  },
-  skillLine: { fontSize: 10, color: PINK_INK, marginBottom: 2, lineHeight: 1.3 },
-  skillCat: { fontFamily: "Comic Neue", fontWeight: 700, color: PINK },
-  entry: { marginBottom: 4 },
-  entryHeader: { flexDirection: "row", justifyContent: "space-between", marginBottom: 1 },
-  entryHeading: { flex: 1, fontSize: 10.5 },
-  entryTitle: { fontFamily: "Comic Neue", fontWeight: 700, fontStyle: "italic", color: PINK },
-  entryOrg: { fontFamily: "Comic Neue", fontStyle: "italic", color: "#c74e93" },
-  entryDate: {
-    fontFamily: "Comic Neue",
-    fontStyle: "italic",
-    fontSize: 10,
-    color: "#c74e93",
-    flexShrink: 0,
-    marginLeft: 8,
-  },
-  bulletRow: { flexDirection: "row", paddingLeft: 6, marginBottom: 2 },
-  bulletDot: { width: 12, fontSize: 10, color: PINK },
-  bulletText: { flex: 1, fontSize: 10, color: PINK_INK, textAlign: "justify", lineHeight: 1.35 },
-});
-
-type ResumeStyles = typeof normalStyles | typeof girlyStyles;
-
-function pick(theme: ResumeTheme): ResumeStyles {
-  return theme === "girly" ? girlyStyles : normalStyles;
-}
-
-function Bullets({
-  bullets,
-  styles,
-  glyph,
-}: {
-  bullets: string[];
-  styles: ResumeStyles;
-  glyph: string;
-}) {
+function Bullets({ bullets }: { bullets: string[] }) {
   return (
     <>
       {bullets.map((b, i) => (
         <View style={styles.bulletRow} key={i}>
-          <Text style={styles.bulletDot}>{glyph}</Text>
+          <Text style={styles.bulletDot}>•</Text>
           <Text style={styles.bulletText}>{b}</Text>
         </View>
       ))}
@@ -205,15 +75,7 @@ function Bullets({
   );
 }
 
-function ExperienceList({
-  entries,
-  styles,
-  glyph,
-}: {
-  entries: ResumeEntry[];
-  styles: ResumeStyles;
-  glyph: string;
-}) {
+function ExperienceList({ entries }: { entries: ResumeEntry[] }) {
   return (
     <>
       {entries.map((e, i) => (
@@ -227,27 +89,14 @@ function ExperienceList({
             </Text>
             {e.date ? <Text style={styles.entryDate}>{e.date}</Text> : null}
           </View>
-          <Bullets bullets={e.bullets} styles={styles} glyph={glyph} />
+          <Bullets bullets={e.bullets} />
         </View>
       ))}
     </>
   );
 }
 
-export function ResumeDocument({
-  data,
-  theme = "normal",
-}: {
-  data: ResumeData;
-  theme?: ResumeTheme;
-}) {
-  if (theme === "girly") registerGirlyFonts();
-  const styles = pick(theme);
-  // Stick to plain ASCII glyphs here: the registered Pacifico/Comic Neue
-  // webfonts only embed a Latin subset, so dingbats like ✿ or ♡ have no
-  // glyph and render as garbage bytes in the PDF.
-  const bullet = theme === "girly" ? "*" : "•";
-
+export function ResumeDocument({ data }: { data: ResumeData }) {
   const contactParts = [data.location, data.email, data.phone].filter(Boolean);
 
   return (
@@ -284,11 +133,7 @@ export function ResumeDocument({
         {data.workExperience.length > 0 && (
           <View>
             <Text style={styles.sectionHeader}>Work Experience</Text>
-            <ExperienceList
-              entries={data.workExperience}
-              styles={styles}
-              glyph={bullet}
-            />
+            <ExperienceList entries={data.workExperience} />
           </View>
         )}
 
@@ -298,11 +143,7 @@ export function ResumeDocument({
             <Text style={styles.sectionHeader}>
               Projects | Leadership Experience &amp; Activities
             </Text>
-            <ExperienceList
-              entries={data.projects}
-              styles={styles}
-              glyph={bullet}
-            />
+            <ExperienceList entries={data.projects} />
           </View>
         )}
 

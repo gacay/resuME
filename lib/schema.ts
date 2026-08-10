@@ -199,10 +199,20 @@ export interface TransferableSkill {
   relevant: boolean;
 }
 
+/** A job requirement the candidate does not clearly evidence yet. */
+export interface MissingRequirement {
+  /** The requirement, e.g. "Kubernetes", "3+ years management". */
+  name: string;
+  /** A grouping label, e.g. "Tools", "Experience", "Certification". */
+  category: string;
+  /** What the posting asks for and why it looks unmet from the materials. */
+  reason: string;
+}
+
 export const SKILLS_TOOL = {
   name: "list_transferable_skills",
   description:
-    "Return the list of transferable skills the candidate genuinely demonstrates, so the user can select which to carry into the tailored resume.",
+    "Return (1) the transferable skills the candidate genuinely demonstrates, so the user can select which to carry into the tailored resume, and (2) the job requirements the candidate does not clearly meet.",
   input_schema: {
     type: "object",
     properties: {
@@ -236,8 +246,33 @@ export const SKILLS_TOOL = {
           required: ["name", "category", "evidence", "relevant"],
         },
       },
+      missing: {
+        type: "array",
+        description:
+          "Job-description requirements the candidate does NOT clearly evidence in the resume or additional experiences. 0-8 entries; empty if the candidate appears to meet everything important. Do NOT fabricate requirements not in the posting.",
+        items: {
+          type: "object",
+          properties: {
+            name: {
+              type: "string",
+              description: "Short requirement name (1-5 words).",
+            },
+            category: {
+              type: "string",
+              description:
+                "Group label, e.g. 'Tools', 'Experience', 'Education', 'Certification'.",
+            },
+            reason: {
+              type: "string",
+              description:
+                "What the posting asks for and why it looks unmet from the provided materials.",
+            },
+          },
+          required: ["name", "category", "reason"],
+        },
+      },
     },
-    required: ["skills"],
+    required: ["skills", "missing"],
   },
 } as const;
 
@@ -258,6 +293,27 @@ export function normalizeSkills(input: {
       category: (s?.category ?? "General").trim() || "General",
       evidence: (s?.evidence ?? "").trim(),
       relevant: Boolean(s?.relevant),
+    });
+  }
+  return out;
+}
+
+export function normalizeMissing(input: {
+  missing?: unknown;
+}): MissingRequirement[] {
+  const list = Array.isArray(input?.missing) ? input.missing : [];
+  const seen = new Set<string>();
+  const out: MissingRequirement[] = [];
+  for (const m of list) {
+    const name = (m?.name ?? "").trim();
+    if (!name) continue;
+    const key = name.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({
+      name,
+      category: (m?.category ?? "Requirement").trim() || "Requirement",
+      reason: (m?.reason ?? "").trim(),
     });
   }
   return out;

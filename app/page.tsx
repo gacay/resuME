@@ -5,6 +5,7 @@ import type {
   ResumeData,
   CoverLetterData,
   TransferableSkill,
+  MissingRequirement,
 } from "@/lib/schema";
 import { loadState, saveState, clearState } from "@/lib/storage";
 import { MusicVisualizer } from "@/components/MusicVisualizer";
@@ -77,14 +78,17 @@ export default function Home() {
   const [status, setStatus] = useState("");
   const [hydrated, setHydrated] = useState(false);
 
-  // Girly Pop mode — repaints the whole site, changes generation style, and
-  // starts the music/visualizer.
+  // Girly Pop mode — repaints the whole site and starts the music/visualizer.
+  // It no longer affects the generated PDF: both modes output the same
+  // professional resume and cover letter.
   const [girly, setGirly] = useState(false);
 
-  // Transferable-skills selection step.
+  // Pre-generation review step (rendered as a modal).
   const [pendingKind, setPendingKind] = useState<Kind | null>(null);
   const [skills, setSkills] = useState<TransferableSkill[] | null>(null);
+  const [missing, setMissing] = useState<MissingRequirement[]>([]);
   const [selected, setSelected] = useState<Record<string, boolean>>({});
+  const [gapText, setGapText] = useState("");
 
   // Load saved inputs once on mount.
   useEffect(() => {
@@ -163,7 +167,9 @@ export default function Home() {
   function resetSkillsStep() {
     setPendingKind(null);
     setSkills(null);
+    setMissing([]);
     setSelected({});
+    setGapText("");
   }
 
   function onClearAll() {
@@ -191,7 +197,8 @@ export default function Home() {
     return null;
   }
 
-  // Step 1 — identify transferable skills for the user to select from.
+  // Step 1 — analyze the resume: identify transferable skills + unmet
+  // requirements, then open the review modal.
   async function startFlow(kind: Kind) {
     setError("");
     setStatus("");
@@ -202,7 +209,7 @@ export default function Home() {
     }
 
     setBusy("skills");
-    setStatus("Scanning your resume for transferable skills…");
+    setStatus("Scanning your resume for skills and gaps…");
     resetSkillsStep();
 
     try {
@@ -218,18 +225,19 @@ export default function Home() {
             projects: expProjects,
             skills: expSkills,
           }),
-          girly,
         }),
       });
       const payload = await res.json();
       if (!res.ok) throw new Error(payload?.error || "Could not read skills.");
 
       const list = (payload.skills ?? []) as TransferableSkill[];
+      const gaps = (payload.missing ?? []) as MissingRequirement[];
       // Pre-select the skills the agent judged relevant to this job.
       const preselect: Record<string, boolean> = {};
       for (const s of list) preselect[s.name] = s.relevant;
 
       setSkills(list);
+      setMissing(gaps);
       setSelected(preselect);
       setPendingKind(kind);
       setStatus("");
@@ -252,13 +260,27 @@ export default function Home() {
     setSelected(next);
   }
 
-  // Step 2 — generate with only the skills the user kept.
+  // Step 2 — generate with only the skills the user kept, plus any experience
+  // they added in the modal to cover the gaps.
   async function confirmAndGenerate() {
     if (!pendingKind || !skills) return;
     const kind = pendingKind;
     const selectedSkills = skills
       .map((s) => s.name)
       .filter((name) => selected[name]);
+
+    const baseExp = combineExperiences({
+      jobs: expJobs,
+      projects: expProjects,
+      skills: expSkills,
+    });
+    const gap = gapText.trim();
+    // The gap text is user-authored truthful experience. It is folded into the
+    // experiences payload and flagged so the model treats it as source material
+    // (never as license to invent).
+    const experiences = gap
+      ? `${baseExp}${baseExp ? "\n\n" : ""}EXPERIENCE THE CANDIDATE ADDED TO ADDRESS JOB REQUIREMENTS (truthful source material — use it, do not embellish beyond it):\n${gap}`
+      : baseExp;
 
     setError("");
     setBusy(kind);
@@ -278,13 +300,8 @@ export default function Home() {
             resumeBase64,
             resumeMime,
             jobDescription,
-            experiences: combineExperiences({
-              jobs: expJobs,
-              projects: expProjects,
-              skills: expSkills,
-            }),
+            experiences,
             selectedSkills,
-            girly,
           }),
         },
       );
@@ -303,18 +320,14 @@ export default function Home() {
       if (kind === "resume") {
         const data = payload as ResumeData & { company?: string };
         const { ResumeDocument } = await import("@/components/ResumeDocument");
-        blob = await pdf(
-          <ResumeDocument data={data} theme={girly ? "girly" : "normal"} />,
-        ).toBlob();
+        blob = await pdf(<ResumeDocument data={data} />).toBlob();
         filename = buildFileName(data.name, "Resume", data.company);
       } else {
         const data = payload as CoverLetterData;
         const { CoverLetterDocument } = await import(
           "@/components/CoverLetterDocument"
         );
-        blob = await pdf(
-          <CoverLetterDocument data={data} theme={girly ? "girly" : "normal"} />,
-        ).toBlob();
+        blob = await pdf(<CoverLetterDocument data={data} />).toBlob();
         filename = buildFileName(data.name, "Cover_Letter", data.company);
       }
 
@@ -357,7 +370,7 @@ export default function Home() {
   // Fixed, deterministic scatter of twinkling background stars for girly mode.
   const bgStars = useMemo(
     () =>
-      Array.from({ length: 28 }, (_, i) => {
+      Array.from({ length: 32 }, (_, i) => {
         const rnd = (n: number) => ((Math.sin(i * 99.7 + n) + 1) / 2) * 100;
         return {
           left: rnd(1),
@@ -370,8 +383,25 @@ export default function Home() {
     [],
   );
 
+  // Floating hearts / sparkles that drift upward in girly mode.
+  const bgHearts = useMemo(
+    () =>
+      Array.from({ length: 14 }, (_, i) => {
+        const rnd = (n: number) => ((Math.sin(i * 57.3 + n) + 1) / 2) * 100;
+        const glyphs = ["💖", "🌸", "✨", "🎀", "💗", "⭐", "🦋"];
+        return {
+          left: rnd(1),
+          size: 34 + rnd(2) * 0.42,
+          duration: 12 + rnd(3) * 0.1,
+          delay: rnd(4) * 0.12,
+          glyph: glyphs[i % glyphs.length],
+        };
+      }),
+    [],
+  );
+
   return (
-    <main className="mx-auto max-w-3xl px-4 py-8 sm:px-5 sm:py-10">
+    <main className="relative mx-auto max-w-3xl px-4 py-8 sm:px-5 sm:py-10">
       {/* Girly Pop background layers (rendered only when the mode is on). */}
       {girly && (
         <>
@@ -388,6 +418,21 @@ export default function Home() {
                 }}
               >
                 {s.glyph}
+              </span>
+            ))}
+          </div>
+          <div className="girly-pop-hearts" aria-hidden>
+            {bgHearts.map((h, i) => (
+              <span
+                key={i}
+                style={{
+                  left: `${h.left}%`,
+                  fontSize: `${h.size}px`,
+                  animationDuration: `${h.duration}s`,
+                  animationDelay: `${h.delay}s`,
+                }}
+              >
+                {h.glyph}
               </span>
             ))}
           </div>
@@ -412,18 +457,21 @@ export default function Home() {
       </div>
 
       {/* Music player + star visualizer (only in Girly Pop mode). */}
-      {girly && (
-        <MusicVisualizer active={girly} src="/girl-like-me.mp3" />
-      )}
+      {girly && <MusicVisualizer active={girly} src="/girl-like-me.mp3" />}
 
-      <header className="mb-8">
-        <h1 className="text-2xl font-bold tracking-tight break-words sm:text-3xl">
-          {girly ? "✨ Resume Tailor ✨" : "Resume Tailor"}
+      <header className="mb-8 text-center sm:text-left">
+        {girly && (
+          <div className="gp-eyebrow" aria-hidden>
+            ˚₊‧ ⋆ ˚꒰ఌ your main-character era ఌ꒱ ˚ ⋆ ‧₊˚
+          </div>
+        )}
+        <h1 className="gp-title text-2xl font-bold tracking-tight break-words sm:text-3xl">
+          Resume Tailor
         </h1>
         <p className="mt-2 text-slate-600">
           {girly
-            ? "Slay bestie 💅 Upload your resume, drop the job description, and pick your main-character transferable skills. We'll glow it up into a tailored, one-page resume (in full pink) or a matching cover letter. Your inputs stay saved in this browser."
-            : "Upload your resume, paste a job description, then pick which transferable skills to carry over before generating a tailored, one-page resume or a matching cover letter. Your inputs are saved in this browser."}
+            ? "Slay bestie 💅 Upload your resume, drop the job description, then pick your main-character transferable skills. We glow it up into a tailored, one-page resume or a matching cover letter. Your inputs stay saved in this browser."
+            : "Upload your resume, paste a job description, then review the skills and gaps we find before generating a tailored, one-page resume or a matching cover letter. Your inputs are saved in this browser."}
         </p>
       </header>
 
@@ -431,7 +479,7 @@ export default function Home() {
         {/* Resume upload */}
         <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
           <label className="block text-sm font-semibold text-slate-800">
-            Current resume (PDF)
+            {girly ? "💾 Current resume (PDF)" : "Current resume (PDF)"}
           </label>
           <p className="mb-3 text-sm text-slate-500">
             The model reads this to pull your name, education, and experience.
@@ -466,7 +514,7 @@ export default function Home() {
             htmlFor="jd"
             className="block text-sm font-semibold text-slate-800"
           >
-            Job description
+            {girly ? "💌 Job description" : "Job description"}
           </label>
           <p className="mb-3 text-sm text-slate-500">
             Paste the full posting you&apos;re tailoring toward.
@@ -484,7 +532,7 @@ export default function Home() {
         {/* Additional experiences — split into three categories */}
         <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
           <label className="block text-sm font-semibold text-slate-800">
-            Additional experiences{" "}
+            {girly ? "🌟 Additional experiences" : "Additional experiences"}{" "}
             <span className="font-normal text-slate-400">(optional)</span>
           </label>
           <p className="mb-4 text-sm text-slate-500">
@@ -547,83 +595,225 @@ export default function Home() {
           </div>
         </section>
 
-        {/* Transferable-skills selection step */}
-        {inSkillsStep && (
-          <section className="rounded-xl border border-slate-900 bg-white p-5 shadow-sm">
-            <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <h2 className="text-base font-semibold text-slate-900">
-                Select transferable skills
-              </h2>
-              <span className="text-sm text-slate-500">
-                {selectedCount} of {skills!.length} selected
-              </span>
-            </div>
-            <p className="mt-1 mb-3 text-sm text-slate-500">
-              These are the skills found in your resume. Only the ones you keep
-              checked will be used in the tailored{" "}
-              {pendingKind === "resume" ? "resume" : "cover letter"} — this stops
-              the model from inventing skills you don&apos;t have. Skills flagged
-              relevant to the job are pre-selected.
-            </p>
+        {/* Actions */}
+        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+          <button
+            type="button"
+            onClick={() => startFlow("resume")}
+            disabled={anyBusy}
+            className="w-full rounded-lg bg-slate-900 px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+          >
+            {busy === "skills"
+              ? "Analyzing…"
+              : girly
+                ? "✨ Generate tailored resume"
+                : "Generate tailored resume"}
+          </button>
+          <button
+            type="button"
+            onClick={() => startFlow("cover")}
+            disabled={anyBusy}
+            className="w-full rounded-lg border border-slate-900 bg-white px-6 py-3 text-sm font-semibold text-slate-900 shadow-sm transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+          >
+            {busy === "skills"
+              ? "Analyzing…"
+              : girly
+                ? "💌 Generate cover letter"
+                : "Generate cover letter"}
+          </button>
+          <button
+            type="button"
+            onClick={onClearAll}
+            disabled={anyBusy}
+            className="w-full rounded-lg px-4 py-3 text-sm font-medium text-slate-500 hover:text-slate-800 disabled:opacity-60 sm:w-auto"
+          >
+            Clear saved data
+          </button>
+        </div>
 
-            <div className="mb-3 flex gap-3 text-sm">
+        {status && !error && <p className="text-sm text-slate-600">{status}</p>}
+        {error && !inSkillsStep && (
+          <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+            {error}
+          </p>
+        )}
+      </div>
+
+      {/* ================= Pre-generation review modal ================= */}
+      {inSkillsStep && (
+        <div
+          className="gp-modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Review skills before generating"
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !anyBusy) resetSkillsStep();
+          }}
+        >
+          <div className="gp-modal-card">
+            <div className="gp-modal-header">
+              <div className="min-w-0">
+                <h2 className="gp-modal-title">
+                  {girly ? "✨ Before we glow it up" : "Before you generate"}
+                </h2>
+                <p className="gp-modal-sub">
+                  Pick the skills to carry into your{" "}
+                  {pendingKind === "resume" ? "resume" : "cover letter"}, and add
+                  anything that covers the gaps we found. We only use what you
+                  give us — no invented experience.
+                </p>
+              </div>
               <button
                 type="button"
-                onClick={() => setAll(true)}
-                className="font-medium text-slate-700 hover:underline"
+                className="gp-modal-close"
+                aria-label="Close"
+                onClick={() => !anyBusy && resetSkillsStep()}
+                disabled={anyBusy}
               >
-                Select all
-              </button>
-              <button
-                type="button"
-                onClick={() => setAll(false)}
-                className="font-medium text-slate-700 hover:underline"
-              >
-                Clear all
+                ✕
               </button>
             </div>
 
-            <div className="space-y-4">
-              {grouped.map(([category, items]) => (
-                <div key={category}>
-                  <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400">
-                    {category}
-                  </h3>
-                  <div className="space-y-1.5">
-                    {items.map((s) => (
-                      <label
-                        key={s.name}
-                        className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-slate-200 px-3 py-2 hover:bg-slate-50"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={!!selected[s.name]}
-                          onChange={() => toggleSkill(s.name)}
-                          className="mt-0.5 h-4 w-4 shrink-0"
-                        />
-                        <span className="min-w-0">
-                          <span className="text-sm font-medium text-slate-800">
-                            {s.name}
+            <div className="gp-modal-body">
+              {/* Transferable skills */}
+              <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+                <h3 className="gp-modal-section-title">
+                  {girly ? "💅 Your transferable skills" : "Transferable skills"}
+                </h3>
+                <span className="text-sm text-slate-500">
+                  {selectedCount} of {skills!.length} selected
+                </span>
+              </div>
+              <p className="mb-3 text-sm text-slate-500">
+                Only checked skills are used, so the model can&apos;t invent
+                skills you don&apos;t have. JD-relevant ones are pre-selected.
+              </p>
+              <div className="mb-3 flex gap-3 text-sm">
+                <button
+                  type="button"
+                  onClick={() => setAll(true)}
+                  className="font-medium text-slate-700 hover:underline"
+                >
+                  Select all
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAll(false)}
+                  className="font-medium text-slate-700 hover:underline"
+                >
+                  Clear all
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                {grouped.map(([category, items]) => (
+                  <div key={category}>
+                    <h4 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                      {category}
+                    </h4>
+                    <div className="space-y-1.5">
+                      {items.map((s) => (
+                        <label
+                          key={s.name}
+                          className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-slate-200 px-3 py-2 hover:bg-slate-50"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={!!selected[s.name]}
+                            onChange={() => toggleSkill(s.name)}
+                            className="mt-0.5 h-4 w-4 shrink-0"
+                          />
+                          <span className="min-w-0">
+                            <span className="text-sm font-medium text-slate-800">
+                              {s.name}
+                            </span>
+                            {s.relevant && (
+                              <span className="ml-2 rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700">
+                                JD match
+                              </span>
+                            )}
+                            {s.evidence && (
+                              <span className="block text-xs text-slate-500">
+                                {s.evidence}
+                              </span>
+                            )}
                           </span>
-                          {s.relevant && (
-                            <span className="ml-2 rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700">
-                              JD match
-                            </span>
-                          )}
-                          {s.evidence && (
-                            <span className="block text-xs text-slate-500">
-                              {s.evidence}
-                            </span>
-                          )}
-                        </span>
-                      </label>
-                    ))}
+                        </label>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
+
+              {/* Gaps / unmet requirements */}
+              <div className="gp-gap">
+                <h3 className="gp-modal-section-title">
+                  {girly
+                    ? "🔍 Requirements you might be missing"
+                    : "Requirements you might be missing"}
+                </h3>
+                {missing.length > 0 ? (
+                  <>
+                    <p className="mb-3 text-sm text-slate-500">
+                      From the job description, these look unmet in your current
+                      materials. If you actually have relevant experience, add it
+                      below and we&apos;ll weave it in truthfully.
+                    </p>
+                    <ul className="space-y-1.5">
+                      {missing.map((m) => (
+                        <li key={m.name} className="gp-gap-item">
+                          <span className="gp-gap-badge">{m.category}</span>
+                          <span className="min-w-0">
+                            <span className="text-sm font-semibold text-slate-800">
+                              {m.name}
+                            </span>
+                            {m.reason && (
+                              <span className="block text-xs text-slate-500">
+                                {m.reason}
+                              </span>
+                            )}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </>
+                ) : (
+                  <p className="text-sm text-slate-500">
+                    {girly
+                      ? "You slay — nothing major looks missing for this role. 💖"
+                      : "Nothing major looks missing for this role based on your materials."}
+                  </p>
+                )}
+
+                <label
+                  htmlFor="gap-text"
+                  className="mb-1 mt-4 block text-sm font-medium text-slate-700"
+                >
+                  Add relevant experience to cover these{" "}
+                  <span className="font-normal text-slate-400">(optional)</span>
+                </label>
+                <p className="mb-2 text-xs text-slate-500">
+                  Only real, truthful experience. This is added to your source
+                  material — the model will not fabricate beyond what you write.
+                </p>
+                <textarea
+                  id="gap-text"
+                  value={gapText}
+                  onChange={(e) => setGapText(e.target.value)}
+                  rows={4}
+                  placeholder="e.g. I used Kubernetes to deploy a class project, and led a 4-person team for two semesters…"
+                  className="w-full resize-y rounded-lg border border-slate-300 p-3 text-sm focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
+                />
+              </div>
+
+              {error && (
+                <p className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                  {error}
+                </p>
+              )}
             </div>
 
-            <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+            <div className="gp-modal-footer">
               <button
                 type="button"
                 onClick={confirmAndGenerate}
@@ -645,46 +835,9 @@ export default function Home() {
                 Cancel
               </button>
             </div>
-          </section>
-        )}
-
-        {/* Actions (hidden while choosing skills) */}
-        {!inSkillsStep && (
-          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-            <button
-              type="button"
-              onClick={() => startFlow("resume")}
-              disabled={anyBusy}
-              className="w-full rounded-lg bg-slate-900 px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
-            >
-              {busy === "skills" ? "Reading skills…" : "Generate tailored resume"}
-            </button>
-            <button
-              type="button"
-              onClick={() => startFlow("cover")}
-              disabled={anyBusy}
-              className="w-full rounded-lg border border-slate-900 bg-white px-6 py-3 text-sm font-semibold text-slate-900 shadow-sm transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
-            >
-              {busy === "skills" ? "Reading skills…" : "Generate cover letter"}
-            </button>
-            <button
-              type="button"
-              onClick={onClearAll}
-              disabled={anyBusy}
-              className="w-full rounded-lg px-4 py-3 text-sm font-medium text-slate-500 hover:text-slate-800 disabled:opacity-60 sm:w-auto"
-            >
-              Clear saved data
-            </button>
           </div>
-        )}
-
-        {status && !error && <p className="text-sm text-slate-600">{status}</p>}
-        {error && (
-          <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-            {error}
-          </p>
-        )}
-      </div>
+        </div>
+      )}
 
       <footer className="mt-12 text-center text-xs text-slate-400">
         Inputs are stored only in your browser. PDFs are generated in-memory and

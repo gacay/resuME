@@ -15,7 +15,6 @@ interface GenerateBody {
   jobDescription?: string;
   experiences?: string;
   selectedSkills?: string[];
-  girly?: boolean;
 }
 
 export async function POST(req: Request) {
@@ -67,7 +66,6 @@ export async function POST(req: Request) {
       experiences,
       hasResume: hasResumePdf || !!body.resumeText?.trim(),
       selectedSkills,
-      girly: !!body.girly,
     }),
   });
 

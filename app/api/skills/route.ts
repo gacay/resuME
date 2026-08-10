@@ -1,4 +1,4 @@
-import { SKILLS_TOOL, normalizeSkills } from "@/lib/schema";
+import { SKILLS_TOOL, normalizeSkills, normalizeMissing } from "@/lib/schema";
 import { SKILLS_SYSTEM_PROMPT, buildSkillsPrompt } from "@/lib/prompt";
 import { runToolCall, AIError, type AIContent } from "@/lib/ai";
 import { ACTIVE_MODELS } from "@/lib/models";
@@ -61,7 +61,7 @@ export async function POST(req: Request) {
   });
 
   try {
-    const raw = await runToolCall<{ skills?: unknown }>({
+    const raw = await runToolCall<{ skills?: unknown; missing?: unknown }>({
       config: ACTIVE_MODELS.skills,
       system: SKILLS_SYSTEM_PROMPT,
       content,
@@ -69,6 +69,7 @@ export async function POST(req: Request) {
     });
 
     const skills = normalizeSkills(raw);
+    const missing = normalizeMissing(raw);
 
     if (skills.length === 0) {
       return Response.json(
@@ -77,7 +78,7 @@ export async function POST(req: Request) {
       );
     }
 
-    return Response.json({ skills });
+    return Response.json({ skills, missing });
   } catch (err) {
     const msg =
       err instanceof AIError

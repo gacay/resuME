@@ -1,29 +1,194 @@
-@import url("https://fonts.googleapis.com/css2?family=Pacifico&family=Poppins:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Baloo+2:wght@400;500;600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Pacifico&family=Poppins:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Baloo+2:wght@400;500;600;700;800&family=Quicksand:wght@400;500;600;700&display=swap");
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --gp-pink: #ff2d95;
+  --gp-pink-deep: #d6156d;
+  --gp-pink-ink: #a01a5e;
+  --gp-pink-soft: #ff8fcd;
+  --gp-lilac: #c77dff;
+  --gp-peach: #ffb3c6;
+  --gp-cream: #fff2f9;
+}
+
+/* ===========================================================================
+   PRE-GENERATION REVIEW MODAL (base — clean look, used in BOTH modes)
+   =========================================================================== */
+@keyframes gp-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes gp-pop {
+  0% {
+    opacity: 0;
+    transform: translateY(14px) scale(0.96);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.gp-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(15, 23, 42, 0.5);
+  backdrop-filter: blur(5px);
+  animation: gp-fade 0.2s ease;
+}
+.gp-modal-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 44rem;
+  max-height: 90vh;
+  overflow: hidden;
+  background: #ffffff;
+  border-radius: 18px;
+  box-shadow: 0 30px 70px rgba(2, 6, 23, 0.4);
+  animation: gp-pop 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.gp-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 20px 22px 16px;
+  border-bottom: 1px solid #e2e8f0;
+}
+.gp-modal-title {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #0f172a;
+  line-height: 1.2;
+}
+.gp-modal-sub {
+  margin-top: 6px;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  color: #64748b;
+}
+.gp-modal-close {
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  color: #475569;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.gp-modal-close:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+.gp-modal-body {
+  padding: 18px 22px;
+  overflow-y: auto;
+}
+.gp-modal-section-title {
+  font-size: 0.98rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+.gp-gap {
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px dashed #e2e8f0;
+}
+.gp-gap-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid #fde68a;
+  background: #fffbeb;
+  border-radius: 12px;
+}
+.gp-gap-badge {
+  flex-shrink: 0;
+  margin-top: 1px;
+  padding: 2px 7px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #b45309;
+  background: #fef3c7;
+  border-radius: 7px;
+}
+.gp-modal-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 22px;
+  border-top: 1px solid #e2e8f0;
+  background: #fff;
+}
+.gp-modal-body::-webkit-scrollbar {
+  width: 10px;
+}
+.gp-modal-body::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 999px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+@media (min-width: 640px) {
+  .gp-modal-footer {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+}
+
 /* ===========================================================================
    GIRLY POP THEME
-   A full-site skin toggled by the Normal/Girly Pop switch. When the top-level
-   wrapper carries `.girly-pop`, these rules repaint the whole page in a pink
-   Y2K aesthetic. Scoped selectors (+ a few !important on colors) let the skin
-   win over the underlying Tailwind utilities without rewriting every element.
+   A full-site skin toggled by the Normal/Girly Pop switch. When <body> carries
+   `.girly-pop`, these rules repaint the whole page in a lush pink Y2K
+   aesthetic. Scoped selectors (+ a few !important on colors) let the skin win
+   over the underlying Tailwind utilities without rewriting every element.
    =========================================================================== */
 
 @keyframes gp-bg-drift {
   0% {
-    background-position: 0% 50%, 100% 20%, 40% 80%;
+    background-position: 0% 50%, 100% 20%, 40% 80%, 50% 50%;
   }
   50% {
-    background-position: 100% 60%, 0% 70%, 60% 10%;
+    background-position: 100% 60%, 0% 70%, 60% 10%, 55% 45%;
   }
   100% {
-    background-position: 0% 50%, 100% 20%, 40% 80%;
+    background-position: 0% 50%, 100% 20%, 40% 80%, 50% 50%;
   }
 }
-
+@keyframes gp-aurora {
+  0% {
+    transform: rotate(0deg) scale(1.4);
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 0.75;
+  }
+  100% {
+    transform: rotate(360deg) scale(1.4);
+    opacity: 0.5;
+  }
+}
 @keyframes gp-twinkle {
   0%,
   100% {
@@ -35,7 +200,42 @@
     transform: scale(1.15) rotate(20deg);
   }
 }
-
+@keyframes gp-rise {
+  0% {
+    transform: translateY(0) translateX(0) rotate(0deg) scale(0.6);
+    opacity: 0;
+  }
+  10% {
+    opacity: 0.9;
+  }
+  50% {
+    transform: translateY(-52vh) translateX(16px) rotate(18deg) scale(1);
+  }
+  90% {
+    opacity: 0.85;
+  }
+  100% {
+    transform: translateY(-104vh) translateX(-10px) rotate(-12deg) scale(1.05);
+    opacity: 0;
+  }
+}
+@keyframes gp-shimmer {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 200% 50%;
+  }
+}
+@keyframes gp-wiggle {
+  0%,
+  100% {
+    transform: rotate(-1.4deg);
+  }
+  50% {
+    transform: rotate(1.4deg);
+  }
+}
 @keyframes gp-float {
   0%,
   100% {
@@ -46,34 +246,45 @@
   }
 }
 
-@keyframes gp-shimmer {
-  0% {
-    background-position: 0% 50%;
-  }
-  100% {
-    background-position: 200% 50%;
-  }
-}
-
-/* Animated candy background layer, fixed behind everything. */
+/* Layered candy background: three drifting radial blooms + a slow aurora sweep. */
 .girly-pop-bg {
   position: fixed;
   inset: 0;
-  z-index: -2;
+  z-index: -3;
   background-color: #ffe3f1;
   background-image:
-    radial-gradient(circle at 20% 20%, #ffd1ec 0%, transparent 45%),
-    radial-gradient(circle at 80% 30%, #e0c3ff 0%, transparent 45%),
-    radial-gradient(circle at 50% 85%, #ffc8dd 0%, transparent 50%);
-  background-size: 200% 200%, 200% 200%, 200% 200%;
-  animation: gp-bg-drift 18s ease-in-out infinite;
+    radial-gradient(circle at 18% 22%, #ffd1ec 0%, transparent 42%),
+    radial-gradient(circle at 82% 28%, #e6c3ff 0%, transparent 44%),
+    radial-gradient(circle at 50% 86%, #ffc8dd 0%, transparent 48%),
+    linear-gradient(120deg, #fff0f8 0%, #ffe6f4 40%, #f6e6ff 100%);
+  background-size:
+    200% 200%,
+    200% 200%,
+    200% 200%,
+    100% 100%;
+  animation: gp-bg-drift 20s ease-in-out infinite;
+}
+.girly-pop-bg::after {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  z-index: -1;
+  background: conic-gradient(
+    from 0deg,
+    rgba(255, 143, 205, 0.28),
+    rgba(199, 125, 255, 0.22),
+    rgba(255, 179, 198, 0.28),
+    rgba(255, 143, 205, 0.28)
+  );
+  filter: blur(60px);
+  animation: gp-aurora 32s linear infinite;
 }
 
-/* Scattered twinkling stars behind the content. */
+/* Scattered twinkling stars. */
 .girly-pop-stars {
   position: fixed;
   inset: 0;
-  z-index: -1;
+  z-index: -2;
   pointer-events: none;
   overflow: hidden;
 }
@@ -85,55 +296,122 @@
   animation: gp-twinkle 3.5s ease-in-out infinite;
 }
 
-.girly-pop {
-  font-family: "Poppins", ui-sans-serif, system-ui, sans-serif;
-  color: #a01a5e;
+/* Emoji hearts / sparkles drifting up the page. */
+.girly-pop-hearts {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  overflow: hidden;
+}
+.girly-pop-hearts span {
+  position: absolute;
+  bottom: -8%;
+  will-change: transform, opacity;
+  filter: drop-shadow(0 4px 8px rgba(214, 21, 109, 0.25));
+  animation: gp-rise linear infinite;
 }
 
-/* Headings get the bubbly display face. */
-.girly-pop h1 {
+.girly-pop {
+  font-family: "Quicksand", "Poppins", ui-sans-serif, system-ui, sans-serif;
+  color: var(--gp-pink-ink);
+}
+
+/* ---- Hero ---------------------------------------------------------------- */
+.girly-pop .gp-eyebrow {
+  font-family: "Baloo 2", cursive;
+  font-weight: 600;
+  font-size: 0.82rem;
+  letter-spacing: 0.06em;
+  color: var(--gp-pink);
+  margin-bottom: 6px;
+  text-shadow: 0 1px 0 #fff;
+  animation: gp-float 5s ease-in-out infinite;
+}
+.girly-pop .gp-title {
   font-family: "Pacifico", cursive !important;
-  color: #ff2d95 !important;
-  text-shadow:
-    2px 2px 0 #fff,
-    4px 4px 0 rgba(255, 143, 205, 0.5);
+  font-weight: 400 !important;
+  font-size: clamp(2.5rem, 8vw, 3.8rem) !important;
+  line-height: 1.16 !important;
   letter-spacing: 0.5px !important;
   text-transform: none !important;
-}
-.girly-pop h2,
-.girly-pop h3 {
-  font-family: "Baloo 2", cursive !important;
-  color: #d6156d !important;
+  background: linear-gradient(
+    100deg,
+    #ff2d95,
+    #ff6fb3,
+    #c77dff,
+    #ff8fcd,
+    #ff2d95
+  );
+  background-size: 250% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent !important;
+  filter: drop-shadow(2px 3px 0 rgba(255, 255, 255, 0.85))
+    drop-shadow(0 8px 16px rgba(214, 21, 109, 0.32));
+  animation: gp-shimmer 5s linear infinite, gp-wiggle 7s ease-in-out infinite;
+  transform-origin: center;
 }
 
 .girly-pop p,
 .girly-pop label,
+.girly-pop li,
 .girly-pop span {
   color: #b02a72;
 }
 
-/* Cards → glossy pink glass panels with a candy border. */
+/* ---- Cards → glossy pink glass panels ------------------------------------ */
 .girly-pop section,
 .girly-pop .gp-card {
+  position: relative;
   background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.85), rgba(255, 224, 242, 0.85)) !important;
-  border: 2px solid #ff8fcd !important;
-  border-radius: 24px !important;
+    linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.9),
+      rgba(255, 224, 242, 0.82)
+    ) !important;
+  border: 2px solid rgba(255, 143, 205, 0.9) !important;
+  border-radius: 26px !important;
   box-shadow:
-    0 8px 0 rgba(255, 143, 205, 0.35),
-    0 10px 30px rgba(214, 21, 109, 0.18) !important;
-  backdrop-filter: blur(4px);
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 10px 0 rgba(255, 143, 205, 0.28),
+    0 18px 40px rgba(214, 21, 109, 0.18) !important;
+  backdrop-filter: blur(6px);
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+.girly-pop section:hover,
+.girly-pop .gp-card:hover {
+  transform: translateY(-3px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 12px 0 rgba(255, 143, 205, 0.32),
+    0 24px 50px rgba(214, 21, 109, 0.24) !important;
+}
+/* Glossy sheen across the top of each card. */
+.girly-pop section::before,
+.girly-pop .gp-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 44%;
+  border-radius: 26px 26px 60% 60% / 26px 26px 20% 20%;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.55),
+    rgba(255, 255, 255, 0)
+  );
+  pointer-events: none;
 }
 
-/* Inputs & textareas → rounded pink fields. */
-.girly-pop input[type="text"],
+/* ---- Inputs & textareas → rounded pink fields ---------------------------- */
 .girly-pop input:not([type="checkbox"]):not([type="file"]),
 .girly-pop textarea,
 .girly-pop input[type="file"] {
-  background: rgba(255, 255, 255, 0.75) !important;
+  background: rgba(255, 255, 255, 0.8) !important;
   border: 2px solid #ffa5d6 !important;
   border-radius: 16px !important;
-  color: #a01a5e !important;
+  color: var(--gp-pink-ink) !important;
 }
 .girly-pop textarea::placeholder,
 .girly-pop input::placeholder {
@@ -141,55 +419,77 @@
 }
 .girly-pop input:focus,
 .girly-pop textarea:focus {
-  border-color: #ff2d95 !important;
-  box-shadow: 0 0 0 3px rgba(255, 45, 149, 0.25) !important;
+  border-color: var(--gp-pink) !important;
+  box-shadow: 0 0 0 4px rgba(255, 45, 149, 0.2) !important;
   outline: none !important;
 }
-
-/* Checkboxes get a pink accent. */
 .girly-pop input[type="checkbox"] {
-  accent-color: #ff2d95;
+  accent-color: var(--gp-pink);
   width: 18px;
   height: 18px;
 }
 
-/* Primary (dark) buttons → hot-pink candy buttons. */
+/* ---- Primary (dark) buttons → hot-pink candy buttons --------------------- */
 .girly-pop .bg-slate-900,
 .girly-pop button.bg-slate-900 {
-  background: linear-gradient(
-    100deg,
-    #ff5cae,
-    #ff2d95,
-    #ff8fcd,
-    #ff2d95
-  ) !important;
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(100deg, #ff5cae, #ff2d95, #ff8fcd, #ff2d95) !important;
   background-size: 200% auto !important;
   color: #fff !important;
   border: 2px solid #fff !important;
   border-radius: 999px !important;
-  box-shadow: 0 6px 18px rgba(255, 45, 149, 0.45) !important;
+  box-shadow: 0 8px 22px rgba(255, 45, 149, 0.5) !important;
   animation: gp-shimmer 4s linear infinite;
   text-transform: none;
+  transition: transform 0.15s ease, filter 0.15s ease;
 }
 .girly-pop .bg-slate-900:hover {
-  filter: brightness(1.05);
-  transform: translateY(-1px);
+  filter: brightness(1.06);
+  transform: translateY(-2px);
+}
+.girly-pop .bg-slate-900:active {
+  transform: translateY(0) scale(0.98);
+}
+/* Shine sweep on hover. */
+.girly-pop .bg-slate-900::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -60%;
+  width: 40%;
+  height: 100%;
+  background: linear-gradient(
+    100deg,
+    transparent,
+    rgba(255, 255, 255, 0.55),
+    transparent
+  );
+  transform: skewX(-20deg);
+  transition: left 0.5s ease;
+}
+.girly-pop .bg-slate-900:hover::after {
+  left: 130%;
 }
 
 /* Secondary / outline buttons. */
 .girly-pop button.border-slate-900 {
-  background: rgba(255, 255, 255, 0.85) !important;
-  color: #ff2d95 !important;
-  border: 2px solid #ff2d95 !important;
+  background: rgba(255, 255, 255, 0.9) !important;
+  color: var(--gp-pink) !important;
+  border: 2px solid var(--gp-pink) !important;
   border-radius: 999px !important;
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+.girly-pop button.border-slate-900:hover {
+  transform: translateY(-2px);
+  background: #fff0f8 !important;
 }
 
-/* Section-selection card highlight border. */
 .girly-pop .border-slate-900 {
-  border-color: #ff2d95 !important;
+  border-color: var(--gp-pink) !important;
 }
 
-/* File input button pill. */
+/* File input pill. */
 .girly-pop input[type="file"]::file-selector-button {
   background: linear-gradient(100deg, #ff5cae, #ff2d95) !important;
   color: #fff !important;
@@ -197,22 +497,27 @@
   border-radius: 999px !important;
   font-weight: 600;
   cursor: pointer;
+  transition: filter 0.15s ease;
+}
+.girly-pop input[type="file"]::file-selector-button:hover {
+  filter: brightness(1.06);
 }
 
 /* Skill chips / small badges. */
 .girly-pop .bg-emerald-100 {
   background: #ffe0f2 !important;
-  color: #d6156d !important;
+  color: var(--gp-pink-deep) !important;
 }
 .girly-pop label.cursor-pointer {
   border-color: #ffbfe3 !important;
   border-radius: 14px !important;
+  transition: background 0.15s ease;
 }
 .girly-pop label.cursor-pointer:hover {
-  background: rgba(255, 209, 236, 0.4) !important;
+  background: rgba(255, 209, 236, 0.45) !important;
 }
 
-/* Recolor the various slate text shades to the pink family. */
+/* Recolor slate text shades into the pink family. */
 .girly-pop .text-slate-900,
 .girly-pop .text-slate-800,
 .girly-pop .text-slate-700,
@@ -226,14 +531,89 @@
   color: #ff2d6b !important;
 }
 
-/* The toggle switch itself (shared, sits above the page). */
+/* ---- Modal in girly mode ------------------------------------------------- */
+.girly-pop .gp-modal-overlay {
+  background: rgba(214, 21, 109, 0.34);
+  backdrop-filter: blur(7px);
+}
+.girly-pop .gp-modal-card {
+  background: linear-gradient(
+    160deg,
+    rgba(255, 255, 255, 0.96),
+    rgba(255, 232, 246, 0.96)
+  );
+  border: 2.5px solid var(--gp-pink-soft);
+  border-radius: 28px;
+  box-shadow: 0 30px 70px rgba(214, 21, 109, 0.4);
+}
+.girly-pop .gp-modal-header {
+  border-bottom: 1.5px dashed rgba(255, 143, 205, 0.8);
+  background: linear-gradient(
+    120deg,
+    rgba(255, 209, 236, 0.55),
+    rgba(230, 195, 255, 0.4)
+  );
+}
+.girly-pop .gp-modal-title {
+  font-family: "Pacifico", cursive;
+  font-weight: 400;
+  font-size: 1.5rem;
+  background: linear-gradient(100deg, #ff2d95, #c77dff);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  filter: drop-shadow(1px 1px 0 rgba(255, 255, 255, 0.8));
+}
+.girly-pop .gp-modal-sub {
+  color: #b02a72;
+}
+.girly-pop .gp-modal-section-title {
+  font-family: "Baloo 2", cursive;
+  color: var(--gp-pink-deep);
+}
+.girly-pop .gp-modal-close {
+  border-color: var(--gp-pink-soft);
+  background: #fff;
+  color: var(--gp-pink);
+}
+.girly-pop .gp-modal-close:hover {
+  background: #fff0f8;
+}
+.girly-pop .gp-gap {
+  border-top: 1.5px dashed rgba(255, 143, 205, 0.8);
+}
+.girly-pop .gp-gap-item {
+  border-color: #f3b6da;
+  background: rgba(255, 240, 248, 0.9);
+}
+.girly-pop .gp-gap-badge {
+  color: #fff;
+  background: linear-gradient(100deg, #ff5cae, #ff2d95);
+}
+.girly-pop .gp-modal-footer {
+  border-top: 1.5px dashed rgba(255, 143, 205, 0.8);
+  background: linear-gradient(
+    120deg,
+    rgba(255, 240, 248, 0.8),
+    rgba(245, 230, 255, 0.7)
+  );
+}
+.girly-pop .gp-modal-body::-webkit-scrollbar-thumb {
+  background: var(--gp-pink-soft);
+}
+
+/* ===========================================================================
+   NORMAL / GIRLY POP SWITCH
+   =========================================================================== */
 .gp-switch-wrap {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: center;
   gap: 8px 12px;
-  margin: 0 auto 20px;
+  margin: 0 auto 22px;
   font-weight: 600;
 }
 .gp-switch {
@@ -251,7 +631,7 @@
 .gp-switch[data-on="true"] {
   border-color: #fff;
   background: linear-gradient(100deg, #ff5cae, #ff2d95);
-  box-shadow: 0 0 18px rgba(255, 45, 149, 0.6);
+  box-shadow: 0 0 22px rgba(255, 45, 149, 0.65);
 }
 .gp-switch-knob {
   position: absolute;
@@ -276,7 +656,7 @@
 }
 .gp-switch-label-on {
   font-family: "Pacifico", cursive;
-  color: #ff2d95;
+  color: var(--gp-pink);
   text-shadow: 1px 1px 0 #fff;
 }
 
@@ -291,8 +671,8 @@
   padding: 12px 16px;
   border-radius: 22px;
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(255, 224, 242, 0.9));
-  border: 2px solid #ff8fcd;
-  box-shadow: 0 8px 24px rgba(214, 21, 109, 0.2);
+  border: 2px solid var(--gp-pink-soft);
+  box-shadow: 0 8px 24px rgba(214, 21, 109, 0.22);
   margin-bottom: 24px;
 }
 .gp-play-btn {
@@ -326,7 +706,7 @@
 .gp-player-title {
   font-family: "Baloo 2", cursive;
   font-weight: 700;
-  color: #d6156d;
+  color: var(--gp-pink-deep);
   font-size: 14px;
   line-height: 1.1;
   white-space: nowrap;
@@ -344,4 +724,23 @@
   flex: 1 1 80px;
   height: 52px;
   min-width: 0;
+}
+
+/* Pink selection + scrollbar flourish in girly mode. */
+.girly-pop ::selection {
+  background: rgba(255, 45, 149, 0.28);
+}
+
+/* Respect users who prefer less motion. */
+@media (prefers-reduced-motion: reduce) {
+  .girly-pop-bg,
+  .girly-pop-bg::after,
+  .girly-pop-stars span,
+  .girly-pop-hearts span,
+  .girly-pop .gp-title,
+  .girly-pop .bg-slate-900,
+  .gp-modal-card,
+  .gp-modal-overlay {
+    animation: none !important;
+  }
 }
