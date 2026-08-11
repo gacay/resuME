@@ -7,7 +7,7 @@ import {
   View,
   StyleSheet,
 } from "@react-pdf/renderer";
-import type { ResumeData, ResumeEntry } from "@/lib/schema";
+import { BUILTIN_SECTIONS, type ResumeData, type ResumeEntry } from "@/lib/schema";
 
 // The fixed template. Built only from @react-pdf primitives and the built-in
 // Times-Roman family (no font registration needed), so the layout — spacing,
@@ -99,57 +99,72 @@ function ExperienceList({ entries }: { entries: ResumeEntry[] }) {
 export function ResumeDocument({ data }: { data: ResumeData }) {
   const contactParts = [data.location, data.email, data.phone].filter(Boolean);
 
-  return (
-    <Document title={`${data.name || "Resume"} — Tailored Resume`}>
-      {/* wrap={false} keeps everything on a single page (overflow is clipped, never spills to page 2). */}
-      <Page size="LETTER" style={styles.page} wrap={false}>
-        {/* Header */}
-        <Text style={styles.name}>{data.name}</Text>
-        <Text style={styles.contact}>
-          <Text>{contactParts.join("  |  ")}</Text>
-          {data.linkedin ? <Text>{"  |  LinkedIn: "}</Text> : null}
-          {data.linkedin ? (
-            <Text style={styles.link}>{data.linkedin}</Text>
-          ) : null}
-        </Text>
+  const customById = new Map(
+    (data.customSections ?? []).map((c) => [c.id, c] as const),
+  );
 
-        {/* Education */}
-        {data.education.length > 0 && (
-          <View>
+  // Effective order: honor the provided order, then append any built-in
+  // sections it is missing so nothing can silently drop out.
+  const order: string[] = (() => {
+    const provided = data.sectionOrder ?? BUILTIN_SECTIONS.map((s) => s.key);
+    const seen = new Set<string>();
+    const result: string[] = [];
+    for (const k of provided) {
+      if (!seen.has(k)) {
+        seen.add(k);
+        result.push(k);
+      }
+    }
+    for (const s of BUILTIN_SECTIONS) {
+      if (!seen.has(s.key)) {
+        seen.add(s.key);
+        result.push(s.key);
+      }
+    }
+    return result;
+  })();
+
+  function renderSection(key: string) {
+    switch (key) {
+      case "education":
+        return data.education.length > 0 ? (
+          <View key="education">
             <Text style={styles.sectionHeader}>Education</Text>
             {data.education.map((ed, i) => (
               <View key={i}>
                 <View style={styles.eduRow}>
                   <Text style={styles.eduSchool}>{ed.school}</Text>
-                  {ed.date ? <Text style={styles.eduDate}>{ed.date}</Text> : null}
+                  {ed.date ? (
+                    <Text style={styles.eduDate}>{ed.date}</Text>
+                  ) : null}
                 </View>
                 <Text style={styles.eduDegree}>{ed.degree}</Text>
               </View>
             ))}
           </View>
-        )}
+        ) : null;
 
-        {/* Work Experience */}
-        {data.workExperience.length > 0 && (
-          <View>
+      case "workExperience":
+        return data.workExperience.length > 0 ? (
+          <View key="workExperience">
             <Text style={styles.sectionHeader}>Work Experience</Text>
             <ExperienceList entries={data.workExperience} />
           </View>
-        )}
+        ) : null;
 
-        {/* Projects | Leadership Experience & Activities */}
-        {data.projects.length > 0 && (
-          <View>
+      case "projects":
+        return data.projects.length > 0 ? (
+          <View key="projects">
             <Text style={styles.sectionHeader}>
               Projects | Leadership Experience &amp; Activities
             </Text>
             <ExperienceList entries={data.projects} />
           </View>
-        )}
+        ) : null;
 
-        {/* Skills & Interests (placed at the bottom) */}
-        {data.skills.length > 0 && (
-          <View>
+      case "skills":
+        return data.skills.length > 0 ? (
+          <View key="skills">
             <Text style={styles.sectionHeader}>Skills &amp; Interests</Text>
             {data.skills.map((s, i) => {
               const details = s.details.trim();
@@ -164,7 +179,38 @@ export function ResumeDocument({ data }: { data: ResumeData }) {
               );
             })}
           </View>
-        )}
+        ) : null;
+
+      default: {
+        // User-authored custom section.
+        const custom = customById.get(key);
+        if (!custom || custom.bullets.length === 0) return null;
+        return (
+          <View key={custom.id}>
+            <Text style={styles.sectionHeader}>{custom.title}</Text>
+            <Bullets bullets={custom.bullets} />
+          </View>
+        );
+      }
+    }
+  }
+
+  return (
+    <Document title={`${data.name || "Resume"} — Tailored Resume`}>
+      {/* wrap={false} keeps everything on a single page (overflow is clipped, never spills to page 2). */}
+      <Page size="LETTER" style={styles.page} wrap={false}>
+        {/* Header (always first) */}
+        <Text style={styles.name}>{data.name}</Text>
+        <Text style={styles.contact}>
+          <Text>{contactParts.join("  |  ")}</Text>
+          {data.linkedin ? <Text>{"  |  LinkedIn: "}</Text> : null}
+          {data.linkedin ? (
+            <Text style={styles.link}>{data.linkedin}</Text>
+          ) : null}
+        </Text>
+
+        {/* Reorderable sections + any custom sections */}
+        {order.map((key) => renderSection(key))}
       </Page>
     </Document>
   );

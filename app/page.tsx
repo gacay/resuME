@@ -1,11 +1,31 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import type {
-  ResumeData,
-  CoverLetterData,
-  TransferableSkill,
-  MissingRequirement,
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  arrayMove,
+  useSortable,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import {
+  BUILTIN_SECTIONS,
+  DEFAULT_SECTION_ORDER,
+  type ResumeData,
+  type CoverLetterData,
+  type TransferableSkill,
+  type MissingRequirement,
+  type CustomSection,
 } from "@/lib/schema";
 import { loadState, saveState, clearState } from "@/lib/storage";
 import { MusicVisualizer } from "@/components/MusicVisualizer";
@@ -48,6 +68,25 @@ function downloadBlob(blob: Blob, filename: string): void {
   URL.revokeObjectURL(url);
 }
 
+/** Parse a fetch response as JSON, but fail with a clear message when the body
+ * is empty or not JSON (e.g. a gateway timeout or a request-size rejection),
+ * instead of the opaque "Unexpected end of JSON input". */
+async function readJson(res: Response): Promise<any> {
+  const text = await res.text();
+  if (!text.trim()) {
+    throw new Error(
+      `The server returned an empty response (HTTP ${res.status}). The request likely timed out or the PDF is too large — try a smaller resume PDF, then retry.`,
+    );
+  }
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error(
+      `Unexpected server response (HTTP ${res.status}). Please try again.`,
+    );
+  }
+}
+
 /** Merge the three additional-experience boxes into one labeled block, exactly
  * like the single free-text box used to relay to the agent. */
 function combineExperiences(parts: {
@@ -62,6 +101,112 @@ function combineExperiences(parts: {
   }
   if (parts.skills.trim()) sections.push(`Skills:\n${parts.skills.trim()}`);
   return sections.join("\n\n");
+}
+
+/** Keep the section order valid: only known keys, every built-in present once,
+ * custom ids that still exist, and no duplicates. */
+function reconcileOrder(order: string[], customs: CustomSection[]): string[] {
+  const builtins = BUILTIN_SECTIONS.map((s) => s.key as string);
+  const customIds = customs.map((c) => c.id);
+  const valid = new Set<string>([...builtins, ...customIds]);
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const k of order) {
+    if (valid.has(k) && !seen.has(k)) {
+      seen.add(k);
+      out.push(k);
+    }
+  }
+  for (const k of builtins)
+    if (!seen.has(k)) {
+      seen.add(k);
+      out.push(k);
+    }
+  for (const id of customIds)
+    if (!seen.has(id)) {
+      seen.add(id);
+      out.push(id);
+    }
+  return out;
+}
+
+/** One draggable row in the section reorder list. Drag is initiated from the
+ * grip handle only (so the rest of the row can be tapped/scrolled on touch). */
+function SortableSectionRow({
+  id,
+  label,
+  custom,
+  onRemove,
+}: {
+  id: string;
+  label: string;
+  custom: boolean;
+  onRemove: (id: string) => void;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.6 : 1,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`flex items-center gap-2 rounded-lg border bg-white px-3 py-2 ${
+        isDragging ? "border-slate-400 shadow-sm" : "border-slate-200"
+      }`}
+    >
+      <span
+        aria-label={`Drag ${label} to reorder`}
+        className="shrink-0 cursor-grab touch-none rounded p-1 text-slate-400 hover:bg-slate-100 active:cursor-grabbing"
+        {...attributes}
+        {...listeners}
+      >
+        <svg
+          width="10"
+          height="16"
+          viewBox="0 0 10 16"
+          fill="currentColor"
+          aria-hidden
+        >
+          <circle cx="2" cy="3" r="1.3" />
+          <circle cx="8" cy="3" r="1.3" />
+          <circle cx="2" cy="8" r="1.3" />
+          <circle cx="8" cy="8" r="1.3" />
+          <circle cx="2" cy="13" r="1.3" />
+          <circle cx="8" cy="13" r="1.3" />
+        </svg>
+      </span>
+      <span className="min-w-0 flex-1 truncate text-sm font-medium text-slate-800">
+        {label}
+        {custom && (
+          <span className="ml-2 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+            custom
+          </span>
+        )}
+      </span>
+      {custom && (
+        <button
+          type="button"
+          onClick={() => onRemove(id)}
+          aria-label={`Remove ${label}`}
+          className="shrink-0 rounded px-2 py-1 text-red-500 hover:bg-red-50"
+        >
+          ✕
+        </button>
+      )}
+    </div>
+  );
 }
 
 export default function Home() {
@@ -88,7 +233,30 @@ export default function Home() {
   const [skills, setSkills] = useState<TransferableSkill[] | null>(null);
   const [missing, setMissing] = useState<MissingRequirement[]>([]);
   const [selected, setSelected] = useState<Record<string, boolean>>({});
-  const [gapText, setGapText] = useState("");
+  // One free-text box per missing requirement, keyed by requirement name.
+  const [gapInputs, setGapInputs] = useState<Record<string, string>>({});
+
+  // Customize step — resume section order + user-added sections.
+  const [sectionOrder, setSectionOrder] =
+    useState<string[]>(DEFAULT_SECTION_ORDER);
+  const [customSections, setCustomSections] = useState<CustomSection[]>([]);
+  const [customizeOpen, setCustomizeOpen] = useState(false);
+  const [newSectionTitle, setNewSectionTitle] = useState("");
+  const [newSectionBody, setNewSectionBody] = useState("");
+
+  // Always-valid order: known keys only, all built-ins present, no duplicates.
+  const resolvedOrder = useMemo(
+    () => reconcileOrder(sectionOrder, customSections),
+    [sectionOrder, customSections],
+  );
+
+  // Drag sensors: pointer covers mouse + touch; keyboard for accessibility.
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    }),
+  );
 
   // Load saved inputs once on mount.
   useEffect(() => {
@@ -100,6 +268,8 @@ export default function Home() {
     if (s.expJobs) setExpJobs(s.expJobs);
     if (s.expProjects) setExpProjects(s.expProjects);
     if (s.expSkills) setExpSkills(s.expSkills);
+    if (Array.isArray(s.sectionOrder)) setSectionOrder(s.sectionOrder);
+    if (Array.isArray(s.customSections)) setCustomSections(s.customSections);
     try {
       setGirly(window.localStorage.getItem(GIRLY_KEY) === "1");
     } catch {
@@ -132,6 +302,8 @@ export default function Home() {
       expJobs,
       expProjects,
       expSkills,
+      sectionOrder: resolvedOrder,
+      customSections,
     });
   }, [
     hydrated,
@@ -142,6 +314,8 @@ export default function Home() {
     expJobs,
     expProjects,
     expSkills,
+    resolvedOrder,
+    customSections,
   ]);
 
   async function onFileChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -169,7 +343,7 @@ export default function Home() {
     setSkills(null);
     setMissing([]);
     setSelected({});
-    setGapText("");
+    setGapInputs({});
   }
 
   function onClearAll() {
@@ -178,6 +352,11 @@ export default function Home() {
     setExpJobs("");
     setExpProjects("");
     setExpSkills("");
+    setSectionOrder(DEFAULT_SECTION_ORDER);
+    setCustomSections([]);
+    setNewSectionTitle("");
+    setNewSectionBody("");
+    setCustomizeOpen(false);
     clearState();
     resetSkillsStep();
     setStatus("");
@@ -227,7 +406,7 @@ export default function Home() {
           }),
         }),
       });
-      const payload = await res.json();
+      const payload = await readJson(res);
       if (!res.ok) throw new Error(payload?.error || "Could not read skills.");
 
       const list = (payload.skills ?? []) as TransferableSkill[];
@@ -274,12 +453,19 @@ export default function Home() {
       projects: expProjects,
       skills: expSkills,
     });
-    const gap = gapText.trim();
-    // The gap text is user-authored truthful experience. It is folded into the
-    // experiences payload and flagged so the model treats it as source material
-    // (never as license to invent).
+    // Per-requirement, user-authored truthful experience. Each non-empty box is
+    // labeled with the requirement it addresses, folded into the experiences
+    // payload and flagged so the model treats it as source material (never as
+    // license to invent).
+    const gap = missing
+      .map((m) => {
+        const text = (gapInputs[m.name] ?? "").trim();
+        return text ? `- ${m.name}: ${text}` : null;
+      })
+      .filter(Boolean)
+      .join("\n");
     const experiences = gap
-      ? `${baseExp}${baseExp ? "\n\n" : ""}EXPERIENCE THE CANDIDATE ADDED TO ADDRESS JOB REQUIREMENTS (truthful source material — use it, do not embellish beyond it):\n${gap}`
+      ? `${baseExp}${baseExp ? "\n\n" : ""}EXPERIENCE THE CANDIDATE ADDED TO ADDRESS SPECIFIC JOB REQUIREMENTS (truthful source material — use it, do not embellish beyond it):\n${gap}`
       : baseExp;
 
     setError("");
@@ -306,7 +492,7 @@ export default function Home() {
         },
       );
 
-      const payload = await res.json();
+      const payload = await readJson(res);
       if (!res.ok) throw new Error(payload?.error || "Generation failed.");
 
       setStatus("Building your PDF…");
@@ -318,10 +504,16 @@ export default function Home() {
       let filename: string;
 
       if (kind === "resume") {
-        const data = payload as ResumeData & { company?: string };
+        const base = payload as ResumeData & { company?: string };
+        // Apply the user's section order + custom sections at render time.
+        const data: ResumeData = {
+          ...base,
+          sectionOrder: resolvedOrder,
+          customSections,
+        };
         const { ResumeDocument } = await import("@/components/ResumeDocument");
         blob = await pdf(<ResumeDocument data={data} />).toBlob();
-        filename = buildFileName(data.name, "Resume", data.company);
+        filename = buildFileName(base.name, "Resume", base.company);
       } else {
         const data = payload as CoverLetterData;
         const { CoverLetterDocument } = await import(
@@ -345,6 +537,43 @@ export default function Home() {
     } finally {
       setBusy(null);
     }
+  }
+
+  function handleReorder(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = resolvedOrder.indexOf(String(active.id));
+    const newIndex = resolvedOrder.indexOf(String(over.id));
+    if (oldIndex === -1 || newIndex === -1) return;
+    setSectionOrder(arrayMove(resolvedOrder, oldIndex, newIndex));
+  }
+
+  function addCustomSection() {
+    const title = newSectionTitle.trim();
+    const bullets = newSectionBody
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean);
+    if (!title || bullets.length === 0) return;
+    const id = `custom:${Date.now().toString(36)}${Math.random()
+      .toString(36)
+      .slice(2, 6)}`;
+    setCustomSections((prev) => [...prev, { id, title, bullets }]);
+    setSectionOrder((prev) => [...prev, id]);
+    setNewSectionTitle("");
+    setNewSectionBody("");
+  }
+
+  function removeCustomSection(id: string) {
+    setCustomSections((prev) => prev.filter((c) => c.id !== id));
+    setSectionOrder((prev) => prev.filter((k) => k !== id));
+  }
+
+  function sectionLabel(key: string): { label: string; custom: boolean } {
+    const b = BUILTIN_SECTIONS.find((s) => s.key === key);
+    if (b) return { label: b.label, custom: false };
+    const c = customSections.find((x) => x.id === key);
+    return { label: c?.title ?? "Custom section", custom: true };
   }
 
   const selectedCount = useMemo(
@@ -755,27 +984,45 @@ export default function Home() {
                 {missing.length > 0 ? (
                   <>
                     <p className="mb-3 text-sm text-slate-500">
-                      From the job description, these look unmet in your current
-                      materials. If you actually have relevant experience, add it
-                      below and we&apos;ll weave it in truthfully.
+                      From the job description, these look unmet. If you actually
+                      have relevant experience for any of them, add it in that
+                      requirement&apos;s box and we&apos;ll weave it in
+                      truthfully — only what you write, nothing invented.
                     </p>
-                    <ul className="space-y-1.5">
+                    <div className="space-y-3">
                       {missing.map((m) => (
-                        <li key={m.name} className="gp-gap-item">
-                          <span className="gp-gap-badge">{m.category}</span>
-                          <span className="min-w-0">
-                            <span className="text-sm font-semibold text-slate-800">
-                              {m.name}
-                            </span>
-                            {m.reason && (
-                              <span className="block text-xs text-slate-500">
-                                {m.reason}
+                        <div
+                          key={m.name}
+                          className="flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 p-3 sm:flex-row sm:items-start"
+                        >
+                          <div className="flex min-w-0 items-start gap-2 sm:w-1/2">
+                            <span className="gp-gap-badge">{m.category}</span>
+                            <span className="min-w-0">
+                              <span className="text-sm font-semibold text-slate-800">
+                                {m.name}
                               </span>
-                            )}
-                          </span>
-                        </li>
+                              {m.reason && (
+                                <span className="block text-xs text-slate-500">
+                                  {m.reason}
+                                </span>
+                              )}
+                            </span>
+                          </div>
+                          <textarea
+                            value={gapInputs[m.name] ?? ""}
+                            onChange={(e) =>
+                              setGapInputs((prev) => ({
+                                ...prev,
+                                [m.name]: e.target.value,
+                              }))
+                            }
+                            rows={3}
+                            placeholder={`Your real experience with ${m.name}… (optional)`}
+                            className="w-full resize-y rounded-lg border border-slate-300 bg-white p-2 text-sm focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500 sm:w-1/2"
+                          />
+                        </div>
                       ))}
-                    </ul>
+                    </div>
                   </>
                 ) : (
                   <p className="text-sm text-slate-500">
@@ -784,27 +1031,110 @@ export default function Home() {
                       : "Nothing major looks missing for this role based on your materials."}
                   </p>
                 )}
-
-                <label
-                  htmlFor="gap-text"
-                  className="mb-1 mt-4 block text-sm font-medium text-slate-700"
-                >
-                  Add relevant experience to cover these{" "}
-                  <span className="font-normal text-slate-400">(optional)</span>
-                </label>
-                <p className="mb-2 text-xs text-slate-500">
-                  Only real, truthful experience. This is added to your source
-                  material — the model will not fabricate beyond what you write.
-                </p>
-                <textarea
-                  id="gap-text"
-                  value={gapText}
-                  onChange={(e) => setGapText(e.target.value)}
-                  rows={4}
-                  placeholder="e.g. I used Kubernetes to deploy a class project, and led a 4-person team for two semesters…"
-                  className="w-full resize-y rounded-lg border border-slate-300 p-3 text-sm focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
-                />
               </div>
+
+              {/* Customize layout — collapsed by default, resume only */}
+              {pendingKind === "resume" && (
+                <div className="gp-gap">
+                  <button
+                    type="button"
+                    onClick={() => setCustomizeOpen((o) => !o)}
+                    aria-expanded={customizeOpen}
+                    className="flex w-full items-center justify-between gap-3 text-left"
+                  >
+                    <span className="gp-modal-section-title">
+                      {girly ? "🎀 Customize" : "Customize"}
+                    </span>
+                    <svg
+                      className={`h-5 w-5 shrink-0 text-slate-500 transition-transform duration-200 ${
+                        customizeOpen ? "rotate-180" : ""
+                      }`}
+                      viewBox="0 0 20 20"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.75"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden
+                    >
+                      <path d="M6 8l4 4 4-4" />
+                    </svg>
+                  </button>
+
+                  <p className="mt-1 text-xs italic text-slate-500">
+                    Reorder sections by dragging, or add your own such as
+                    Certifications, Awards, or Publications. Changes apply to
+                    your downloaded PDF.
+                  </p>
+
+                  {customizeOpen && (
+                    <div className="mt-3 space-y-4">
+                      {/* Reorder list — drag by the grip handle (touch + mouse + keyboard) */}
+                      <DndContext
+                        sensors={sensors}
+                        collisionDetection={closestCenter}
+                        onDragEnd={handleReorder}
+                      >
+                        <SortableContext
+                          items={resolvedOrder}
+                          strategy={verticalListSortingStrategy}
+                        >
+                          <div className="space-y-1.5">
+                            {resolvedOrder.map((key) => {
+                              const meta = sectionLabel(key);
+                              return (
+                                <SortableSectionRow
+                                  key={key}
+                                  id={key}
+                                  label={meta.label}
+                                  custom={meta.custom}
+                                  onRemove={removeCustomSection}
+                                />
+                              );
+                            })}
+                          </div>
+                        </SortableContext>
+                      </DndContext>
+
+                      {/* Add a custom section */}
+                      <div className="rounded-lg border border-dashed border-slate-300 p-3">
+                        <label
+                          htmlFor="cs-title"
+                          className="mb-1 block text-sm font-medium text-slate-700"
+                        >
+                          Add a section
+                        </label>
+                        <input
+                          id="cs-title"
+                          value={newSectionTitle}
+                          onChange={(e) => setNewSectionTitle(e.target.value)}
+                          placeholder="Section title, e.g. Certifications"
+                          className="mb-2 w-full rounded-lg border border-slate-300 p-2 text-sm focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
+                        />
+                        <textarea
+                          value={newSectionBody}
+                          onChange={(e) => setNewSectionBody(e.target.value)}
+                          rows={3}
+                          placeholder={
+                            "One item per line, e.g.\nAWS Certified Cloud Practitioner (2025)\nGoogle Data Analytics Certificate"
+                          }
+                          className="w-full resize-y rounded-lg border border-slate-300 p-2 text-sm focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
+                        />
+                        <button
+                          type="button"
+                          onClick={addCustomSection}
+                          disabled={
+                            !newSectionTitle.trim() || !newSectionBody.trim()
+                          }
+                          className="mt-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 disabled:opacity-40"
+                        >
+                          Add section
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {error && (
                 <p className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">

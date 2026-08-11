@@ -1,5 +1,7 @@
 // Browser persistence so the user's inputs survive a page refresh.
 
+import type { CustomSection } from "@/lib/schema";
+
 const KEY = "resume-tailor:v1";
 
 export interface StoredState {
@@ -11,6 +13,10 @@ export interface StoredState {
   expJobs: string;
   expProjects: string;
   expSkills: string;
+  /** Resume section order (built-in keys + custom ids) from the customize step. */
+  sectionOrder: string[];
+  /** User-authored extra resume sections. */
+  customSections: CustomSection[];
 }
 
 export function loadState(): Partial<StoredState> {

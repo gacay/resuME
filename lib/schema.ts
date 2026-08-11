@@ -13,6 +13,14 @@ export interface ResumeEntry {
   bullets: string[];
 }
 
+/** A user-defined extra resume section (e.g. Certifications, Awards). Its
+ * content is authored by the user, not the AI. */
+export interface CustomSection {
+  id: string;
+  title: string;
+  bullets: string[];
+}
+
 export interface ResumeData {
   name: string;
   location: string;
@@ -26,7 +34,37 @@ export interface ResumeData {
   workExperience: ResumeEntry[];
   /** "PROJECTS | LEADERSHIP EXPERIENCE & ACTIVITIES" section. */
   projects: ResumeEntry[];
+  // --- Client-side layout controls (not produced by the AI) ---
+  /** Order of section keys: built-in keys plus custom section ids. */
+  sectionOrder?: string[];
+  /** User-authored extra sections, referenced by id in sectionOrder. */
+  customSections?: CustomSection[];
 }
+
+/** Built-in resume sections that can be reordered. `heading` is the exact
+ * printed section header; `label` is the short name shown in the reorder UI. */
+export const BUILTIN_SECTIONS: {
+  key: "education" | "workExperience" | "projects" | "skills";
+  label: string;
+  heading: string;
+}[] = [
+  { key: "education", label: "Education", heading: "Education" },
+  {
+    key: "workExperience",
+    label: "Work Experience",
+    heading: "Work Experience",
+  },
+  {
+    key: "projects",
+    label: "Projects & Leadership",
+    heading: "Projects | Leadership Experience & Activities",
+  },
+  { key: "skills", label: "Skills & Interests", heading: "Skills & Interests" },
+];
+
+export const DEFAULT_SECTION_ORDER: string[] = BUILTIN_SECTIONS.map(
+  (s) => s.key,
+);
 
 // JSON Schema given to the model as a tool input schema. Forcing the model to
 // call this tool guarantees the response is shaped exactly like ResumeData.
