@@ -36,10 +36,10 @@ import {
   ThreadSpiral,
   DocIcon,
   NonCheck,
-  FooterArcs,
   Chevron,
 } from "@/components/NonLaArt";
 import { ResumePreview, CoverLetterPreview } from "@/components/DocumentPreview";
+import { FaviconManager } from "@/components/FaviconManager";
 
 const THEME_KEY = "resume-tailor:theme";
 
@@ -728,6 +728,7 @@ export default function Home() {
 
   return (
     <div>
+      <FaviconManager loading={screen === "loading"} />
       {/* App chrome: resuME wordmark far-left, lamp toggle far-right */}
       <div
         style={{
@@ -1049,8 +1050,6 @@ export default function Home() {
               </button>
             </div>
           </div>
-
-          <FooterArcs />
         </div>
       )}
 
