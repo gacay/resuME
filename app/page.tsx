@@ -310,7 +310,7 @@ export default function Home() {
   const [expSkills, setExpSkills] = useState("");
 
   const [theme, setTheme] = useState<"light" | "dark">("light");
-  const [screen, setScreen] = useState<Screen>("form");
+  const [screen, setScreen] = useState<Screen>("empty");
   const [busy, setBusy] = useState<"skills" | Kind | null>(null);
   const [error, setError] = useState("");
   const [hydrated, setHydrated] = useState(false);
@@ -366,14 +366,8 @@ export default function Home() {
     } catch {
       /* ignore */
     }
-    const hasAny = !!(
-      s.resumeBase64 ||
-      (s.jobDescription ?? "").trim() ||
-      (s.expJobs ?? "").trim() ||
-      (s.expProjects ?? "").trim() ||
-      (s.expSkills ?? "").trim()
-    );
-    if (!hasAny) setScreen("empty");
+    // The First Visit page is always the landing screen; saved inputs still
+    // load into state so the form is pre-filled once the user continues.
     setHydrated(true);
   }, []);
 
