@@ -235,6 +235,14 @@ export interface TransferableSkill {
   evidence: string;
   /** Whether the skill is relevant to the target job description. */
   relevant: boolean;
+  /**
+   * True only when the relevance is an INFERRED/adjacent overlap (the candidate
+   * does not literally have the named requirement but a real capability of
+   * theirs transfers to it, e.g. Power Apps CRM ↔ a "Salesforce" posting).
+   * These are the uncertain judgment calls surfaced for user confirmation.
+   * False for a direct/exact match, which is auto-included without review.
+   */
+  transferable: boolean;
 }
 
 /** A job requirement the candidate does not clearly evidence yet. */
@@ -278,10 +286,15 @@ export const SKILLS_TOOL = {
             relevant: {
               type: "boolean",
               description:
-                "True if this skill is relevant to the target job description.",
+                "True if this skill is relevant to the target job description (whether by exact match OR by transferable overlap).",
+            },
+            transferable: {
+              type: "boolean",
+              description:
+                "True ONLY when the relevance is an inferred/adjacent overlap — the candidate does not literally have the named requirement, but a real capability of theirs transfers to it (e.g. a CRM built in Power Apps for a 'Salesforce' posting). False for a direct/exact match where the candidate plainly has the named skill or tool.",
             },
           },
-          required: ["name", "category", "evidence", "relevant"],
+          required: ["name", "category", "evidence", "relevant", "transferable"],
         },
       },
       missing: {
@@ -331,6 +344,7 @@ export function normalizeSkills(input: {
       category: (s?.category ?? "General").trim() || "General",
       evidence: (s?.evidence ?? "").trim(),
       relevant: Boolean(s?.relevant),
+      transferable: Boolean(s?.transferable),
     });
   }
   return out;

@@ -456,6 +456,17 @@ export default function Home() {
     setGapInputs({});
   }
 
+  // From the final preview: start a fresh tailoring. Clears the generated
+  // document and the skills-review state, but keeps the uploaded resume and the
+  // inputs so the user can retarget (new job description) and generate again.
+  function startNew() {
+    resetSkillsStep();
+    setResult(null);
+    setError("");
+    setMenuOpen(false);
+    setScreen("form");
+  }
+
   function onClearAll() {
     removeResume();
     setJobDescription("");
@@ -523,7 +534,10 @@ export default function Home() {
       const list = (payload.skills ?? []) as TransferableSkill[];
       const gaps = (payload.missing ?? []) as MissingRequirement[];
       const preselect: Record<string, boolean> = {};
-      for (const s of list) preselect[s.name] = s.relevant;
+      // Exact, relevant matches are trusted and auto-included (checked).
+      // Transferable/inferred matches start unchecked so the user must confirm
+      // each one — this is the anti-hallucination guard.
+      for (const s of list) preselect[s.name] = s.relevant && !s.transferable;
 
       setSkills(list);
       setMissing(gaps);
@@ -544,15 +558,26 @@ export default function Home() {
 
   function setAll(value: boolean) {
     if (!skills) return;
-    const next: Record<string, boolean> = {};
-    for (const s of skills) next[s.name] = value;
-    setSelected(next);
+    // Only toggle the visible (transferable) skills; hidden exact matches stay
+    // included regardless.
+    setSelected((prev) => {
+      const next = { ...prev };
+      for (const s of skills) {
+        if (s.transferable) next[s.name] = value;
+      }
+      return next;
+    });
   }
 
   // Step 2 — generate, then show the document preview (no auto-download).
-  async function runGenerate() {
-    if (!pendingKind || !skills) return;
-    const kind = pendingKind;
+  // `kindOverride` lets the final preview generate the OTHER document (e.g. the
+  // cover letter after the resume) reusing the analysis already done — no second
+  // trip through the skills review.
+  async function runGenerate(kindOverride?: Kind) {
+    const kind = kindOverride ?? pendingKind;
+    if (!kind || !skills) return;
+    const returnTo: Screen = screen === "output" ? "output" : "review";
+    setPendingKind(kind);
     const selectedSkills = skills
       .map((s) => s.name)
       .filter((name) => selected[name]);
@@ -610,7 +635,7 @@ export default function Home() {
       setScreen("output");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
-      setScreen("review");
+      setScreen(returnTo);
     } finally {
       setBusy(null);
     }
@@ -696,21 +721,33 @@ export default function Home() {
     return { label: c?.title ?? "Custom section", custom: true };
   }
 
+  // Only the uncertain judgment calls (inferred/adjacent overlaps) are shown for
+  // review. Exact matches are auto-included silently to keep the report focused.
+  const visibleSkills = useMemo(
+    () => (skills ?? []).filter((s) => s.transferable),
+    [skills],
+  );
+
+  // Exact, relevant matches quietly carried into the resume without review.
+  const autoIncludedCount = useMemo(
+    () => (skills ?? []).filter((s) => s.relevant && !s.transferable).length,
+    [skills],
+  );
+
   const selectedCount = useMemo(
-    () => Object.values(selected).filter(Boolean).length,
-    [selected],
+    () => visibleSkills.filter((s) => selected[s.name]).length,
+    [visibleSkills, selected],
   );
 
   const grouped = useMemo(() => {
-    if (!skills) return [];
     const map = new Map<string, TransferableSkill[]>();
-    for (const s of skills) {
+    for (const s of visibleSkills) {
       const arr = map.get(s.category) ?? [];
       arr.push(s);
       map.set(s.category, arr);
     }
     return [...map.entries()];
-  }, [skills]);
+  }, [visibleSkills]);
 
   const anyBusy = busy !== null;
   const kindNoun = pendingKind === "cover" ? "cover letter" : "resume";
@@ -1105,9 +1142,11 @@ export default function Home() {
                     color: "var(--ink2)",
                   }}
                 >
-                  Pick the skills to carry into your {kindNoun}, and fill any gap
-                  you genuinely have experience with. We use only what you give
-                  us.
+                  These are skills we inferred from adjacent experience, so they
+                  need your OK before they go into your {kindNoun}. Skills that
+                  match the posting directly are already included. Fill any gap
+                  you genuinely have experience with, too. We use only what you
+                  give us.
                 </p>
               </div>
               <button
@@ -1140,12 +1179,28 @@ export default function Home() {
                 }}
               >
                 <h3 className="font-lora" style={{ fontWeight: 500, fontSize: 16, margin: 0 }}>
-                  Transferable skills
+                  Skills to confirm
                 </h3>
-                <span style={{ fontSize: 12.5, color: "var(--ink2)" }}>
-                  {selectedCount} of {skills.length} selected
-                </span>
+                {visibleSkills.length > 0 && (
+                  <span style={{ fontSize: 12.5, color: "var(--ink2)" }}>
+                    {selectedCount} of {visibleSkills.length} selected
+                  </span>
+                )}
               </div>
+              {autoIncludedCount > 0 && (
+                <p style={{ margin: "8px 0 0", fontSize: 12.5, lineHeight: 1.5, color: "var(--ink2)" }}>
+                  {autoIncludedCount} skill{autoIncludedCount === 1 ? "" : "s"} that
+                  match the posting directly {autoIncludedCount === 1 ? "is" : "are"} already
+                  included automatically.
+                </p>
+              )}
+              {visibleSkills.length === 0 ? (
+                <p style={{ margin: "10px 0 4px", fontSize: 13, lineHeight: 1.6, color: "var(--ink2)" }}>
+                  Nothing to double-check here, your experience lines up with the
+                  posting directly. Just fill any gaps below if they apply.
+                </p>
+              ) : (
+              <>
               <div style={{ display: "flex", gap: 14, margin: "12px 0 16px", fontSize: 12.5 }}>
                 <button
                   type="button"
@@ -1199,7 +1254,7 @@ export default function Home() {
                         <NonCheck checked={!!selected[s.name]} />
                         <span style={{ minWidth: 0 }}>
                           <span style={{ fontSize: 13.5, fontWeight: 600 }}>{s.name}</span>
-                          {s.relevant && (
+                          {s.transferable && (
                             <span
                               style={{
                                 marginLeft: 8,
@@ -1209,7 +1264,7 @@ export default function Home() {
                                 color: "var(--gold)",
                               }}
                             >
-                              JD match
+                              Transferable
                             </span>
                           )}
                           {s.evidence && (
@@ -1231,6 +1286,8 @@ export default function Home() {
                   </div>
                 </div>
               ))}
+              </>
+              )}
 
               {/* Gaps */}
               <div style={{ marginTop: 24, paddingTop: 20, borderTop: "1px solid var(--line)" }}>
@@ -1476,7 +1533,7 @@ export default function Home() {
               </button>
               <button
                 type="button"
-                onClick={runGenerate}
+                onClick={() => runGenerate()}
                 disabled={anyBusy}
                 style={{ ...btnPrimary, padding: "12px 24px", ...disabled(anyBusy) }}
               >
@@ -1574,7 +1631,25 @@ export default function Home() {
               </div>
               <button
                 type="button"
-                onClick={() => setScreen("review")}
+                onClick={() => runGenerate(result.kind === "cover" ? "resume" : "cover")}
+                disabled={anyBusy}
+                style={{
+                  fontSize: 13.5,
+                  fontWeight: 600,
+                  padding: "11px 20px",
+                  borderRadius: 4,
+                  border: "1px solid var(--accent)",
+                  background: "transparent",
+                  color: "var(--accent)",
+                  cursor: "pointer",
+                  ...disabled(anyBusy),
+                }}
+              >
+                {result.kind === "cover" ? "Generate resume" : "Generate cover letter"}
+              </button>
+              <button
+                type="button"
+                onClick={startNew}
                 style={{
                   fontSize: 13.5,
                   fontWeight: 600,
@@ -1586,7 +1661,7 @@ export default function Home() {
                   cursor: "pointer",
                 }}
               >
-                Adjust skills
+                New
               </button>
             </div>
           </div>
