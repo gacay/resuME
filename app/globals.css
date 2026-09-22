@@ -154,6 +154,30 @@ body {
     transform: rotate(7deg);
   }
 }
+@keyframes lampPull {
+  0% {
+    transform: translateY(0);
+  }
+  22% {
+    transform: translateY(6px);
+  }
+  48% {
+    transform: translateY(-3px);
+  }
+  68% {
+    transform: translateY(2px);
+  }
+  84% {
+    transform: translateY(-1px);
+  }
+  100% {
+    transform: translateY(0);
+  }
+}
+.lamp-pull {
+  display: inline-block;
+  animation: lampPull 0.52s ease-out;
+}
 .scoot-thread {
   animation: threadDash 5s linear infinite;
 }
@@ -178,7 +202,8 @@ body {
   .scoot-bob,
   .scoot-wheel,
   .scoot-bag,
-  .scoot-thread {
+  .scoot-thread,
+  .lamp-pull {
     animation: none !important;
   }
   .scoot-run {

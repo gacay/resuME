@@ -310,6 +310,8 @@ export default function Home() {
   const [expSkills, setExpSkills] = useState("");
 
   const [theme, setTheme] = useState<"light" | "dark">("light");
+  // Bumped on each lamp click to restart the pull-bounce animation.
+  const [lampPulls, setLampPulls] = useState(0);
   const [screen, setScreen] = useState<Screen>("empty");
   const [busy, setBusy] = useState<"skills" | Kind | null>(null);
   const [error, setError] = useState("");
@@ -796,11 +798,17 @@ export default function Home() {
         </button>
         <button
           type="button"
-          onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
+          onClick={() => {
+            setTheme((t) => (t === "dark" ? "light" : "dark"));
+            setLampPulls((n) => n + 1);
+          }}
           aria-label="Toggle light and dark"
           style={{ background: "none", border: 0, padding: 0, cursor: "pointer", lineHeight: 0 }}
         >
-          <Lamp />
+          {/* Keyed remount restarts the pull-bounce on every click. */}
+          <span key={lampPulls} className={lampPulls > 0 ? "lamp-pull" : undefined}>
+            <Lamp />
+          </span>
         </button>
       </div>
 

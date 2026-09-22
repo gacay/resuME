@@ -33,7 +33,7 @@ export function Lamp() {
     "M69 25.6 V32.1",
   ];
   return (
-    <svg width="86" height="72" viewBox="0 0 86 72" aria-hidden="true">
+    <svg width="86" height="86" viewBox="0 -14 86 86" aria-hidden="true">
       <defs>
         <radialGradient id="lampGlow" cx="50%" cy="50%" r="55%">
           <stop offset="0%" style={{ stopColor: "var(--glowA)", stopOpacity: 0.85 }} />
@@ -87,6 +87,12 @@ export function Lamp() {
         strokeWidth="0.7"
         opacity="0.5"
       />
+      {/* Hanging cord — runs down over the hat and plugs into the center strap,
+          which is drawn just after so it caps the cord's tip. */}
+      <g style={cone} strokeLinecap="round">
+        <circle cx="43" cy="-13" r="1.7" style={{ fill: "var(--coneLine)" }} />
+        <path d="M43 -13 L43 20" fill="none" strokeWidth="1.2" />
+      </g>
       <ellipse
         cx="43"
         cy="20"
