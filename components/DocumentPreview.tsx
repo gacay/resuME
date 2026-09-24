@@ -175,7 +175,6 @@ export function ResumePreview({ data }: { data: ResumeData }) {
           style={{
             fontSize: 22,
             fontWeight: 700,
-            textTransform: "uppercase",
             letterSpacing: "1px",
             lineHeight: 1.2,
           }}

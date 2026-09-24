@@ -28,7 +28,6 @@ const styles = StyleSheet.create({
     fontFamily: "Times-Bold",
     fontSize: 16,
     textAlign: "center",
-    textTransform: "uppercase",
     letterSpacing: 0.5,
     marginBottom: 3,
   },

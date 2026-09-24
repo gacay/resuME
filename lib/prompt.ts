@@ -15,8 +15,11 @@ NATURAL, HUMAN VOICE (write like a person, not a generator)
 - Avoid overused resume/AI cliches and buzzword padding: e.g. "results-driven", "detail-oriented", "team player", "passionate", "dynamic", "synergy", "leveraged", "spearheaded" (when generic), "responsible for", "in today's fast-paced world". Say the real thing plainly instead.
 - KEYWORDS FOR ATS, WITH A TRUTHFULNESS GATE: use a job-description keyword, tool, technology, method, or certification verbatim ONLY when the candidate genuinely has it (evidenced in the resume, the additional experiences, or the selected transferable skills). For a term the candidate does hold, keep it verbatim and make the connective wording human — never drop or vaguely paraphrase it. When a requirement is met only through a TRANSFERABLE or adjacent skill, describe the real capability in the job's conceptual language and name the candidate's ACTUAL tool — do NOT insert a specific proprietary product, platform, or certification the candidate has not used (e.g. if they built a CRM in Power Apps and the posting wants Salesforce, write the CRM / workflow-automation work naming Power Apps; never write "Salesforce"). Keyword matching NEVER overrides truthfulness.
 
+NO EM DASHES (critical — they read as AI-written)
+- Do NOT use em dashes (—) or en dashes (–) anywhere in the bullets or any other field. Use commas, periods, "and", or a rephrase instead, and write sentences that do not lean on dashes. Ordinary hyphens in compound words (e.g. "data-driven", "full-stack") are fine.
+
 TRUTHFULNESS (critical)
-- Use ONLY facts found in the provided resume or additional experiences. Never invent employers, titles, dates, degrees, metrics, or technologies. You may rephrase, reframe, and emphasize — never fabricate.
+- Use ONLY facts found in the provided resume or additional experiences. Never invent employers, titles, dates, degrees, metrics, or technologies. You may rephrase, reframe, and emphasize, never fabricate.
 - Copy the candidate's name, contact details (location, email, phone, LinkedIn), and education exactly as they appear in the source resume.
 
 TRANSFERABLE SKILLS (critical)

@@ -198,6 +198,17 @@ export function removeEmDashes(text: string): string {
     .trim();
 }
 
+/** Normalize a person's name to Title Case (first letter of each word capitalized).
+ * Only rewrites ALL-CAPS / no-lowercase input so genuinely mixed-case names
+ * (McDonald, DeShawn, O'Brien) are preserved exactly as provided. */
+export function normalizeName(name: string): string {
+  const n = (name ?? "").trim();
+  if (!n || /[a-z]/.test(n)) return n;
+  return n.toLowerCase().replace(/[A-Za-zÀ-ɏ]+/g, (w) =>
+    w.charAt(0).toUpperCase() + w.slice(1),
+  );
+}
+
 /** Defensive normalization so a missing/odd field never crashes the PDF renderer. */
 export function normalizeResume(input: Partial<ResumeData>): ResumeData {
   const entries = (list: unknown): ResumeEntry[] =>
@@ -206,11 +217,12 @@ export function normalizeResume(input: Partial<ResumeData>): ResumeData {
       organization: e?.organization ?? "",
       date: e?.date ?? "",
       // Enforce a consistent 3 bullets per entry, even if the model returns more.
-      bullets: asStringArray(e?.bullets).slice(0, 3),
+      // Strip em/en dashes so generated bullets never carry that AI tell.
+      bullets: asStringArray(e?.bullets).slice(0, 3).map(removeEmDashes),
     }));
 
   return {
-    name: input.name ?? "",
+    name: normalizeName(input.name ?? ""),
     location: input.location ?? "",
     email: input.email ?? "",
     phone: input.phone ?? "",
@@ -218,7 +230,10 @@ export function normalizeResume(input: Partial<ResumeData>): ResumeData {
     education: Array.isArray(input.education) ? input.education : [],
     workExperience: entries(input.workExperience),
     projects: entries(input.projects),
-    skills: Array.isArray(input.skills) ? input.skills : [],
+    skills: (Array.isArray(input.skills) ? input.skills : []).map((s) => ({
+      category: s?.category ?? "",
+      details: removeEmDashes(s?.details ?? ""),
+    })),
   };
 }
 

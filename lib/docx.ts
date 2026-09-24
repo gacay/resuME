@@ -197,7 +197,7 @@ export async function resumeToDocxBlob(data: ResumeData): Promise<Blob> {
       spacing: { after: 40 },
       children: [
         new TextRun({
-          text: (data.name || "").toUpperCase(),
+          text: data.name || "",
           bold: true,
           font: FONT,
           size: 32,
